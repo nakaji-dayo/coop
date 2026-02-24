@@ -1,0 +1,26 @@
+services:
+  coop:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET:-}
+      - SLACK_BOT_USER_ID=${SLACK_BOT_USER_ID:-}
+      - SLACK_NOTIFY_CHANNEL=${SLACK_NOTIFY_CHANNEL:-}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - NOTION_API_KEY=${NOTION_API_KEY:-}
+      - NOTION_TASK_DATABASE_ID=${NOTION_TASK_DATABASE_ID:-}
+      - NOTION_GUIDELINES_PAGE_ID=${NOTION_GUIDELINES_PAGE_ID:-}
+      - NOTION_INSTRUCTIONS_PAGE_ID=${NOTION_INSTRUCTIONS_PAGE_ID:-}
+    command: ["--config", "config/coop-dryrun.dhall"]
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: http coop:3000
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN:-}
+    ports:
+      - "4040:4040"
+    depends_on:
+      - coop

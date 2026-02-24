@@ -1,0 +1,8 @@
+packages: .
+
+constraints: req >= 3.13.4
+
+source-repository-package
+  type: git
+  location: https://github.com/velveteer/slacker.git
+  tag: d8e2a4bafbfb088b5cfecc94dec8003044d38770
