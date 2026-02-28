@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="coop.png" width="128" alt="coop">
+</p>
+
 # coop
 
 AIをバックエンドとした、タスク管理・Slackメンション対応を支援するツール。
