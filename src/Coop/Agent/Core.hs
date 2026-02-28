@@ -1,10 +1,11 @@
 module Coop.Agent.Core
   ( handleMention
   , handleSlackEvent
+  , dailyBriefing
   ) where
 
 import Coop.Agent.Context (buildContext)
-import Coop.Agent.Prompt (buildMentionAnalysisPrompt, parseMentionAnalysis, MentionAnalysis (..), AnalysisResult (..))
+import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..))
 import Coop.App.Env (Env (..))
 import Coop.App.Log (logInfo, logError, logWarn, logDebug)
 import Coop.Config (Config (..), SlackConfig (..))
@@ -110,15 +111,14 @@ handleMention mention = do
                 , taskPriority = Medium
                 , taskStatus = Open
                 , taskDueDate = Nothing
-                , taskSource = SlackMention (toSlackRef mention)
+                , taskEstimate = Nothing
+                , taskSource = Just (SlackMention (toSlackRef mention))
                 , taskCreatedAt = now
                 , taskUpdatedAt = now
                 }
           tid <- createTask task
           logInfo $ "Created task (fallback): " <> unTaskId tid
 
-          replyThread (pmChannel mention) (pmTimestamp mention) $
-            "Task created: " <> T.take 100 (pmStrippedText mention) <> " [Medium]"
           notify Notification
             { notifChannel = notifyChannel
             , notifText = formatNotification mention tid Medium (T.take 100 (pmStrippedText mention)) "Could not parse LLM analysis"
@@ -137,16 +137,14 @@ handleMention mention = do
                 , taskPriority = maPriority analysis
                 , taskStatus = Open
                 , taskDueDate = maDueDate analysis
-                , taskSource = SlackMention (toSlackRef mention)
+                , taskEstimate = Nothing
+                , taskSource = Just (SlackMention (toSlackRef mention))
                 , taskCreatedAt = now
                 , taskUpdatedAt = now
                 }
           tid <- createTask task
           logInfo $ "Created task: " <> unTaskId tid <> " [" <> T.pack (show (maPriority analysis)) <> "]"
 
-          replyThread (pmChannel mention) (pmTimestamp mention) $
-            "Task created: " <> maTitle analysis <> " [" <> T.pack (show (maPriority analysis)) <> "]\n"
-            <> "Reason: " <> maReason analysis
           notify Notification
             { notifChannel = notifyChannel
             , notifText = formatNotification mention tid (maPriority analysis) (maTitle analysis) (maReason analysis)
@@ -154,9 +152,7 @@ handleMention mention = do
             }
 
     DirectMention -> do
-      -- Just a mention without content - acknowledge
-      replyThread (pmChannel mention) (pmTimestamp mention)
-        "Hi! You mentioned me but didn't include a message. Try mentioning me with a task description."
+      logDebug "Direct mention without content, skipping"
 
 toSlackRef :: ParsedMention -> SlackMessageRef
 toSlackRef pm = SlackMessageRef
@@ -205,3 +201,75 @@ priorityToLevel Critical = Urgent
 priorityToLevel High     = Warning
 priorityToLevel Medium   = Info
 priorityToLevel Low      = Info
+
+-- | Run the daily briefing pipeline
+dailyBriefing
+  :: (TaskStore m, DocStore m, LLM m, Notifier m, MonadReader (Env m) m, MonadIO m, KatipContext m)
+  => m ()
+dailyBriefing = do
+  config <- asks envConfig
+  let notifyChannel = slackNotifyChannel (cfgSlack config)
+
+  logInfo "Starting daily briefing"
+
+  ctx <- buildContext
+
+  now0 <- liftIO getCurrentTime
+  tz <- liftIO getCurrentTimeZone
+  let today = localDay (utcToLocalTime tz now0)
+      prompt = buildDailyBriefingPrompt ctx today
+
+  resp <- complete prompt
+  logInfo $ "Daily briefing LLM response: " <> T.take 200 (crResponseText resp)
+
+  let briefingText = case parseDailyBriefing (crResponseText resp) of
+        Left err -> do
+          T.unlines
+            [ ":sunrise: *Daily Briefing*"
+            , ""
+            , crResponseText resp
+            , ""
+            , "_(" <> T.pack err <> ")_"
+            ]
+        Right briefing -> formatDailyBriefing briefing
+
+  notify Notification
+    { notifChannel = notifyChannel
+    , notifText = briefingText
+    , notifLevel = Info
+    }
+
+  logInfo "Daily briefing completed"
+
+formatDailyBriefing :: DailyBriefing -> Text
+formatDailyBriefing briefing = T.unlines $ concat
+  [ [ ":sunrise: *Daily Briefing*"
+    , ""
+    , dbSummary briefing
+    , ""
+    , "*Today's Schedule:*"
+    ]
+  , if null (dbSchedule briefing)
+    then ["No tasks scheduled for today."]
+    else map formatBriefingTask (dbSchedule briefing)
+  , if null (dbEstimateRequests briefing) then []
+    else
+      [ ""
+      , "*Estimate Requests:*"
+      ] <> map formatEstimateRequest (dbEstimateRequests briefing)
+  ]
+
+formatBriefingTask :: BriefingTask -> Text
+formatBriefingTask bt = T.concat
+  [ if btIsMust bt then ":red_circle: " else ":white_circle: "
+  , "[" <> btPriority bt <> "] "
+  , "<" <> notionPageUrl (TaskId (btTaskId bt)) <> "|" <> btTitle bt <> ">"
+  , " — " <> btReason bt
+  ]
+
+formatEstimateRequest :: EstimateRequest -> Text
+formatEstimateRequest er = T.concat
+  [ ":hourglass: "
+  , "<" <> notionPageUrl (TaskId (erTaskId er)) <> "|" <> erTitle er <> ">"
+  , " — " <> erReason er
+  ]

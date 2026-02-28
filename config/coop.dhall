@@ -29,8 +29,14 @@ in
   , notionStatusOpen = env:NOTION_STATUS_OPEN as Text ? "Open"
   , notionStatusInProgress = env:NOTION_STATUS_IN_PROGRESS as Text ? "In Progress"
   , notionStatusDone = env:NOTION_STATUS_DONE as Text ? "Done"
+  , notionPropAssignee = env:NOTION_PROP_ASSIGNEE as Text ? ""
+  , notionAssigneeUserId = env:NOTION_ASSIGNEE_USER_ID as Text ? ""
+  , notionPropEstimate = env:NOTION_PROP_ESTIMATE as Text ? ""
   }
 , cfgDryrun =
   { dryrunDataDir = "config/dryrun-data"
+  }
+, cfgScheduler =
+  { schedulerBriefingCron = env:SCHEDULER_BRIEFING_CRON as Text ? "* * * * *"
   }
 }

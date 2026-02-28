@@ -1,11 +1,12 @@
 module Main where
 
-import Coop.Config (loadConfig, Config (..), RunMode (..), ConnectionMode (..), DryrunConfig (..), SlackConfig (..), ClaudeConfig (..), NotionConfig (..))
+import Coop.Config (loadConfig, Config (..), RunMode (..), ConnectionMode (..), DryrunConfig (..), SlackConfig (..), NotionConfig (..))
 import Coop.App.Env (Env (..))
 import Coop.App.Log (withLogEnv, parseLogLevel)
 import Coop.App.Monad (AppM)
 import Coop.Server.Handlers (mkApp, mkHealthApp)
 import Coop.Adapter.Slack.SocketMode (runSlackSocketMode)
+import Coop.Scheduler (runScheduler)
 import UnliftIO.Async (race_)
 import Coop.Adapter.Dryrun.TaskStore (mkDryrunTaskStoreOps)
 import Coop.Adapter.Dryrun.DocStore (mkDryrunDocStoreOps)
@@ -46,10 +47,11 @@ main = do
     let port = fromIntegral (cfgPort config)
     TIO.putStrLn $ "Starting coop on port " <> pack (show port)
     case slackConnectionMode (cfgSlack config) of
-      Webhook -> Warp.run port (mkApp env)
+      Webhook ->
+        race_ (Warp.run port (mkApp env)) (runScheduler env)
       SocketMode -> do
         TIO.putStrLn "Using Socket Mode for Slack connection"
-        race_ (Warp.run port (mkHealthApp env)) (runSlackSocketMode env)
+        race_ (race_ (Warp.run port (mkHealthApp env)) (runSlackSocketMode env)) (runScheduler env)
 
 mkEnv :: Config -> LogEnv -> Manager -> IO (Env AppM)
 mkEnv config logEnv manager = do

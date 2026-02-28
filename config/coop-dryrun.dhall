@@ -26,8 +26,14 @@
   , notionStatusOpen = "Open"
   , notionStatusInProgress = "In Progress"
   , notionStatusDone = "Done"
+  , notionPropAssignee = ""
+  , notionAssigneeUserId = ""
+  , notionPropEstimate = ""
   }
 , cfgDryrun =
   { dryrunDataDir = "config/dryrun-data"
+  }
+, cfgScheduler =
+  { schedulerBriefingCron = "0 9 * * *"
   }
 }

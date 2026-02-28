@@ -44,7 +44,8 @@ data Task = Task
   , taskPriority    :: Priority
   , taskStatus      :: TaskStatus
   , taskDueDate     :: Maybe Day
-  , taskSource      :: TaskSource
+  , taskEstimate    :: Maybe Text
+  , taskSource      :: Maybe TaskSource
   , taskCreatedAt   :: UTCTime
   , taskUpdatedAt   :: UTCTime
   } deriving stock (Eq, Show, Generic)

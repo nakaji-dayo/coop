@@ -18,8 +18,13 @@ dryrunResponse req =
   let userMsg = case filter (\m -> msgRole m == User) (crMessages req) of
         (m:_) -> msgContent m
         []    -> "no message"
-      -- Extract just the "Message:" line if present
-      msgLine = case filter ("Message:" `T.isPrefixOf`) (T.lines userMsg) of
+  in if "daily briefing" `T.isInfixOf` T.toLower userMsg
+     then dryrunBriefingResponse
+     else dryrunMentionResponse userMsg
+
+dryrunMentionResponse :: T.Text -> T.Text
+dryrunMentionResponse userMsg =
+  let msgLine = case filter ("Message:" `T.isPrefixOf`) (T.lines userMsg) of
         (l:_) -> T.strip $ T.drop 8 l
         []    -> T.take 60 userMsg
       title = T.take 60 msgLine
@@ -33,6 +38,22 @@ dryrunResponse req =
       , "}"
       , "```"
       ]
+
+dryrunBriefingResponse :: T.Text
+dryrunBriefingResponse = T.unlines
+  [ "```json"
+  , "{"
+  , "  \"schedule\": ["
+  , "    { \"task_id\": \"dryrun-task-1\", \"title\": \"[DRYRUN] Sample task\", \"priority\": \"High\", \"reason\": \"Dryrun mode sample\", \"is_must\": true },"
+  , "    { \"task_id\": \"dryrun-task-2\", \"title\": \"[DRYRUN] Another task\", \"priority\": \"Medium\", \"reason\": \"Dryrun mode sample\", \"is_must\": false }"
+  , "  ],"
+  , "  \"estimate_requests\": ["
+  , "    { \"task_id\": \"dryrun-task-3\", \"title\": \"[DRYRUN] Big task\", \"reason\": \"No estimate provided\" }"
+  , "  ],"
+  , "  \"summary\": \"[DRYRUN] Today's briefing: 2 tasks scheduled, 1 needs estimate.\""
+  , "}"
+  , "```"
+  ]
 
 escapeJson :: T.Text -> T.Text
 escapeJson = T.replace "\"" "\\\"" . T.replace "\n" " "

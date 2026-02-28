@@ -10,9 +10,12 @@ import Coop.Domain.Task (Task (..), TaskId (..), TaskStatus (..), Priority (..))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson (Value (..), object, (.=))
 import Data.Aeson.Key (fromText)
+import qualified Data.Aeson.KeyMap as KM
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
-import Data.Time (Day)
+import Data.Time (Day, UTCTime (..))
+import Data.Time.Calendar (fromGregorian)
+import Data.Time.Format (parseTimeM, defaultTimeLocale)
 import Network.HTTP.Client (Manager)
 
 mkLiveTaskStoreOps :: (MonadIO m) => NotionConfig -> Manager -> TaskStoreOps m
@@ -38,7 +41,7 @@ mkLiveTaskStoreOps notionCfg manager =
       result <- notionPost manager apiKey url NotionDatabaseQuery
       case result of
         Left _err -> pure []
-        Right resp -> pure $ map pageToTask (nqrResults resp)
+        Right resp -> pure $ map (pageToTask notionCfg) (nqrResults resp)
 
   , opsUpdateTask = \task -> liftIO $ do
       let url = "https://api.notion.com/v1/pages/" <> unpack (unTaskId (taskId task))
@@ -75,6 +78,13 @@ taskToNotionProperties cfg task = object $ concat
             ]
         ]
       _ -> []
+  , [ fromText (notionPropAssignee cfg) .= object
+        [ "people" .=
+            [ object [ "object" .= ("user" :: Text), "id" .= notionAssigneeUserId cfg ] ]
+        ]
+    | not (T.null (notionPropAssignee cfg))
+    , not (T.null (notionAssigneeUserId cfg))
+    ]
   ]
 
 dayToText :: Day -> Text
@@ -108,15 +118,104 @@ statusToText cfg InProgress = notionStatusInProgress cfg
 statusToText cfg Done       = notionStatusDone cfg
 statusToText cfg Archived   = notionStatusDone cfg
 
-pageToTask :: NotionPage -> Task
-pageToTask _page = Task
-  { taskId = TaskId (npgId _page)
-  , taskTitle = ""       -- Would parse from properties
-  , taskDescription = "" -- Would parse from properties
-  , taskPriority = Medium
-  , taskStatus = Open
-  , taskDueDate = Nothing
-  , taskSource = error "pageToTask: source not available from Notion"
-  , taskCreatedAt = error "pageToTask: createdAt not parsed"
-  , taskUpdatedAt = error "pageToTask: updatedAt not parsed"
+pageToTask :: NotionConfig -> NotionPage -> Task
+pageToTask cfg page =
+  let props = npgProperties page
+      epoch = UTCTime (fromGregorian 2000 1 1) 0
+  in Task
+  { taskId = TaskId (npgId page)
+  , taskTitle = extractTitle (notionPropName cfg) props
+  , taskDescription = ""
+  , taskPriority = textToPriority (extractSelect (notionPropPriority cfg) props)
+  , taskStatus = textToStatus cfg (extractStatus (notionPropStatus cfg) props)
+  , taskDueDate = extractDate (notionPropDueDate cfg) props
+  , taskEstimate = extractRichText (notionPropEstimate cfg) props
+  , taskSource = Nothing
+  , taskCreatedAt = epoch
+  , taskUpdatedAt = epoch
   }
+
+-- | Extract title from a Notion title property
+extractTitle :: Text -> KM.KeyMap Value -> Text
+extractTitle propName props
+  | T.null propName = ""
+  | otherwise = case KM.lookup (fromText propName) props of
+      Just (Object obj) -> case KM.lookup "title" obj of
+        Just (Array arr) -> case toList arr of
+          (Object rt : _) -> case KM.lookup "plain_text" rt of
+            Just (String t) -> t
+            _ -> ""
+          _ -> ""
+        _ -> ""
+      _ -> ""
+  where
+    toList v = foldr (:) [] v
+
+-- | Extract select property value
+extractSelect :: Text -> KM.KeyMap Value -> Text
+extractSelect propName props
+  | T.null propName = ""
+  | otherwise = case KM.lookup (fromText propName) props of
+      Just (Object obj) -> case KM.lookup "select" obj of
+        Just (Object sel) -> case KM.lookup "name" sel of
+          Just (String t) -> t
+          _ -> ""
+        Just Null -> ""
+        _ -> ""
+      _ -> ""
+
+-- | Extract status property value
+extractStatus :: Text -> KM.KeyMap Value -> Text
+extractStatus propName props
+  | T.null propName = ""
+  | otherwise = case KM.lookup (fromText propName) props of
+      Just (Object obj) -> case KM.lookup "status" obj of
+        Just (Object st) -> case KM.lookup "name" st of
+          Just (String t) -> t
+          _ -> ""
+        _ -> ""
+      _ -> ""
+
+-- | Extract date property value
+extractDate :: Text -> KM.KeyMap Value -> Maybe Day
+extractDate propName props
+  | T.null propName = Nothing
+  | otherwise = case KM.lookup (fromText propName) props of
+      Just (Object obj) -> case KM.lookup "date" obj of
+        Just (Object dt) -> case KM.lookup "start" dt of
+          Just (String t) -> parseTimeM True defaultTimeLocale "%Y-%m-%d" (T.unpack t)
+          _ -> Nothing
+        Just Null -> Nothing
+        _ -> Nothing
+      _ -> Nothing
+
+-- | Extract rich_text property value
+extractRichText :: Text -> KM.KeyMap Value -> Maybe Text
+extractRichText propName props
+  | T.null propName = Nothing
+  | otherwise = case KM.lookup (fromText propName) props of
+      Just (Object obj) -> case KM.lookup "rich_text" obj of
+        Just (Array arr) -> case toList arr of
+          (Object rt : _) -> case KM.lookup "plain_text" rt of
+            Just (String t) | not (T.null t) -> Just t
+            _ -> Nothing
+          _ -> Nothing
+        _ -> Nothing
+      _ -> Nothing
+  where
+    toList v = foldr (:) [] v
+
+textToPriority :: Text -> Priority
+textToPriority t = case T.toLower t of
+  "critical" -> Critical
+  "high"     -> High
+  "medium"   -> Medium
+  "low"      -> Low
+  _          -> Medium
+
+textToStatus :: NotionConfig -> Text -> TaskStatus
+textToStatus cfg t
+  | t == notionStatusDone cfg       = Done
+  | t == notionStatusInProgress cfg = InProgress
+  | t == notionStatusOpen cfg       = Open
+  | otherwise                       = Open
