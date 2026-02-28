@@ -1,6 +1,6 @@
 module Main where
 
-import Coop.Config (loadConfig, Config (..), RunMode (..), ConnectionMode (..), DryrunConfig (..), SlackConfig (..), NotionConfig (..))
+import Coop.Config (loadConfig, Config (..), RunMode (..), ConnectionMode (..), DryrunConfig (..), SlackConfig (..), NotionConfig (..), LLMConfig (..))
 import Coop.App.Env (Env (..))
 import Coop.App.Log (withLogEnv, parseLogLevel)
 import Coop.App.Monad (AppM)
@@ -13,6 +13,7 @@ import Coop.Adapter.Dryrun.DocStore (mkDryrunDocStoreOps)
 import Coop.Adapter.Dryrun.LLM (mkDryrunLLMOps)
 import Coop.Adapter.Dryrun.Notifier (mkDryrunNotifierOps)
 import Coop.Adapter.Claude.LLM (mkLiveLLMOps)
+import Coop.Adapter.OpenAI.LLM (mkOpenAILLMOps)
 import Coop.Adapter.Notion.DocStore (mkLiveDocStoreOps)
 import Coop.Adapter.Notion.TaskStore (mkLiveTaskStoreOps)
 import Coop.Adapter.Slack.Notifier (mkLiveNotifierOps)
@@ -71,8 +72,11 @@ mkEnv config logEnv manager = do
         }
     Live -> do
       let slackCfg  = cfgSlack config
-          claudeCfg = cfgClaude config
+          llmCfg    = cfgLLM config
           notionCfg = cfgNotion config
+          llmOps    = case llmBackend llmCfg of
+            "OpenAI" -> mkOpenAILLMOps (llmOpenAI llmCfg) manager
+            _        -> mkLiveLLMOps (llmClaude llmCfg) manager
       pure Env
         { envConfig       = config
         , envLogEnv       = logEnv
@@ -81,6 +85,6 @@ mkEnv config logEnv manager = do
         , envHttpManager  = manager
         , envTaskStore    = mkLiveTaskStoreOps notionCfg manager
         , envDocStore     = mkLiveDocStoreOps (notionApiKey notionCfg) manager
-        , envLLM          = mkLiveLLMOps claudeCfg manager
+        , envLLM          = llmOps
         , envNotifier     = mkLiveNotifierOps (slackBotToken slackCfg) manager
         }

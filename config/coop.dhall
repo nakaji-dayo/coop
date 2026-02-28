@@ -13,9 +13,16 @@ in
   , slackAppToken = env:SLACK_APP_TOKEN as Text ? ""
   , slackConnectionMode = if env:SLACK_SOCKET_MODE ? False then ConnMode.SocketMode else ConnMode.Webhook
   }
-, cfgClaude =
-  { claudeApiKey = env:CLAUDE_API_KEY as Text
-  , claudeModel = "claude-sonnet-4-20250514"
+, cfgLLM =
+  { llmBackend = env:LLM_BACKEND as Text ? "Claude"
+  , llmClaude =
+    { claudeApiKey = env:CLAUDE_API_KEY as Text ? ""
+    , claudeModel = "claude-sonnet-4-20250514"
+    }
+  , llmOpenAI =
+    { openaiApiKey = env:OPENAI_API_KEY as Text ? ""
+    , openaiModel = env:OPENAI_MODEL as Text ? "gpt-4o"
+    }
   }
 , cfgNotion =
   { notionApiKey = env:NOTION_API_KEY as Text

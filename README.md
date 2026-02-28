@@ -71,7 +71,10 @@ cabal run coop -- --config config/coop.dhall
 | `SLACK_SOCKET_MODE` | `True` で Socket Mode、省略または `False` で Webhook |
 | `COOP_DRYRUN` | `True` で Dryrun モード |
 | `LOG_LEVEL` | ログレベル（`DEBUG`, `INFO`, `WARNING`, `ERROR`。デフォルト: `INFO`） |
-| `CLAUDE_API_KEY` | Anthropic API key |
+| `LLM_BACKEND` | LLMバックエンド（`Claude` or `OpenAI`。デフォルト: `Claude`） |
+| `CLAUDE_API_KEY` | Anthropic API key（Claude使用時） |
+| `OPENAI_API_KEY` | OpenAI API key（OpenAI使用時） |
+| `OPENAI_MODEL` | OpenAIモデル名（デフォルト: `gpt-4o`） |
 | `NOTION_API_KEY` | Notion Integration Token |
 | `NOTION_TASK_DATABASE_ID` | タスク管理用 Notion Database の ID |
 | `NOTION_GUIDELINES_PAGE_ID` | 行動指針ドキュメントの Notion Page ID |

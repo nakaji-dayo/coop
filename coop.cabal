@@ -39,6 +39,9 @@ library
         Coop.Adapter.Claude.Types
         Coop.Adapter.Claude.Client
         Coop.Adapter.Claude.LLM
+        Coop.Adapter.OpenAI.Types
+        Coop.Adapter.OpenAI.Client
+        Coop.Adapter.OpenAI.LLM
         Coop.Adapter.Notion.Types
         Coop.Adapter.Notion.Client
         Coop.Adapter.Notion.DocStore

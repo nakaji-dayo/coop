@@ -10,9 +10,16 @@
   , slackAppToken = ""
   , slackConnectionMode = < Webhook | SocketMode >.Webhook
   }
-, cfgClaude =
-  { claudeApiKey = "dryrun-claude-key"
-  , claudeModel = "claude-sonnet-4-20250514"
+, cfgLLM =
+  { llmBackend = "Claude"
+  , llmClaude =
+    { claudeApiKey = "dryrun-claude-key"
+    , claudeModel = "claude-sonnet-4-20250514"
+    }
+  , llmOpenAI =
+    { openaiApiKey = "dryrun-openai-key"
+    , openaiModel = "gpt-4o"
+    }
   }
 , cfgNotion =
   { notionApiKey = "dryrun-notion-key"

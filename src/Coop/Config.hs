@@ -4,6 +4,8 @@ module Coop.Config
   , ConnectionMode (..)
   , SlackConfig (..)
   , ClaudeConfig (..)
+  , OpenAIConfig (..)
+  , LLMConfig (..)
   , NotionConfig (..)
   , DryrunConfig (..)
   , SchedulerConfig (..)
@@ -36,6 +38,19 @@ data SlackConfig = SlackConfig
 data ClaudeConfig = ClaudeConfig
   { claudeApiKey  :: Text
   , claudeModel   :: Text
+  } deriving stock (Eq, Show, Generic)
+    deriving anyclass (FromDhall)
+
+data OpenAIConfig = OpenAIConfig
+  { openaiApiKey :: Text
+  , openaiModel  :: Text
+  } deriving stock (Eq, Show, Generic)
+    deriving anyclass (FromDhall)
+
+data LLMConfig = LLMConfig
+  { llmBackend :: Text        -- ^ "Claude" or "OpenAI"
+  , llmClaude  :: ClaudeConfig
+  , llmOpenAI  :: OpenAIConfig
   } deriving stock (Eq, Show, Generic)
     deriving anyclass (FromDhall)
 
@@ -72,7 +87,7 @@ data Config = Config
   , cfgPort      :: Natural
   , cfgLogLevel  :: Text
   , cfgSlack     :: SlackConfig
-  , cfgClaude    :: ClaudeConfig
+  , cfgLLM       :: LLMConfig
   , cfgNotion    :: NotionConfig
   , cfgDryrun    :: DryrunConfig
   , cfgScheduler :: SchedulerConfig
