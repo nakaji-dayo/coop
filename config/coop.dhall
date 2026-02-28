@@ -46,4 +46,10 @@ in
 , cfgScheduler =
   { schedulerBriefingCron = env:SCHEDULER_BRIEFING_CRON as Text ? "* * * * *"
   }
+, cfgGoogleCalendar =
+  { googleClientId = env:GOOGLE_CLIENT_ID as Text ? ""
+  , googleClientSecret = env:GOOGLE_CLIENT_SECRET as Text ? ""
+  , googleCalendarId = env:GOOGLE_CALENDAR_ID as Text ? "primary"
+  , googleTokenPath = env:GOOGLE_TOKEN_PATH as Text ? "~/.config/coop/google-token.json"
+  }
 }

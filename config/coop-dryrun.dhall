@@ -43,4 +43,10 @@
 , cfgScheduler =
   { schedulerBriefingCron = "0 9 * * *"
   }
+, cfgGoogleCalendar =
+  { googleClientId = ""
+  , googleClientSecret = ""
+  , googleCalendarId = ""
+  , googleTokenPath = ""
+  }
 }

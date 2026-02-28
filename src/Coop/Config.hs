@@ -9,6 +9,7 @@ module Coop.Config
   , NotionConfig (..)
   , DryrunConfig (..)
   , SchedulerConfig (..)
+  , GoogleCalendarConfig (..)
   , loadConfig
   ) where
 
@@ -82,15 +83,24 @@ data SchedulerConfig = SchedulerConfig
   } deriving stock (Eq, Show, Generic)
     deriving anyclass (FromDhall)
 
+data GoogleCalendarConfig = GoogleCalendarConfig
+  { googleClientId     :: Text
+  , googleClientSecret :: Text
+  , googleCalendarId   :: Text
+  , googleTokenPath    :: Text
+  } deriving stock (Eq, Show, Generic)
+    deriving anyclass (FromDhall)
+
 data Config = Config
-  { cfgMode      :: RunMode
-  , cfgPort      :: Natural
-  , cfgLogLevel  :: Text
-  , cfgSlack     :: SlackConfig
-  , cfgLLM       :: LLMConfig
-  , cfgNotion    :: NotionConfig
-  , cfgDryrun    :: DryrunConfig
-  , cfgScheduler :: SchedulerConfig
+  { cfgMode           :: RunMode
+  , cfgPort           :: Natural
+  , cfgLogLevel       :: Text
+  , cfgSlack          :: SlackConfig
+  , cfgLLM            :: LLMConfig
+  , cfgNotion         :: NotionConfig
+  , cfgDryrun         :: DryrunConfig
+  , cfgScheduler      :: SchedulerConfig
+  , cfgGoogleCalendar :: GoogleCalendarConfig
   } deriving stock (Eq, Show, Generic)
     deriving anyclass (FromDhall)
 

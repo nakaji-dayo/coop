@@ -28,14 +28,17 @@ library
         Coop.Domain.Notification
         Coop.Domain.LLM
         Coop.Domain.Doc
+        Coop.Domain.Calendar
         Coop.Effect.TaskStore
         Coop.Effect.DocStore
         Coop.Effect.LLM
         Coop.Effect.Notifier
+        Coop.Effect.CalendarStore
         Coop.Adapter.Dryrun.TaskStore
         Coop.Adapter.Dryrun.DocStore
         Coop.Adapter.Dryrun.LLM
         Coop.Adapter.Dryrun.Notifier
+        Coop.Adapter.Dryrun.CalendarStore
         Coop.Adapter.Claude.Types
         Coop.Adapter.Claude.Client
         Coop.Adapter.Claude.LLM
@@ -48,6 +51,10 @@ library
         Coop.Adapter.Notion.TaskStore
         Coop.Adapter.Slack.Notifier
         Coop.Adapter.Slack.SocketMode
+        Coop.Adapter.GoogleCalendar.Types
+        Coop.Adapter.GoogleCalendar.Auth
+        Coop.Adapter.GoogleCalendar.Client
+        Coop.Adapter.GoogleCalendar.CalendarStore
         Coop.Server.API
         Coop.Server.Handlers
         Coop.Agent.Core
@@ -81,6 +88,8 @@ library
       , crypton >=0.34
       , memory >=0.18
       , directory >=1.3
+      , filepath >=1.4
+      , process >=1.6
       , cron >=0.7
       , slacker
 

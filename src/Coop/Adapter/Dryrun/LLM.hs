@@ -50,7 +50,11 @@ dryrunBriefingResponse = T.unlines
   , "  \"estimate_requests\": ["
   , "    { \"task_id\": \"dryrun-task-3\", \"title\": \"[DRYRUN] Big task\", \"reason\": \"No estimate provided\" }"
   , "  ],"
-  , "  \"summary\": \"[DRYRUN] Today's briefing: 2 tasks scheduled (est. 3.5h), 1 needs estimate.\""
+  , "  \"meeting_preps\": ["
+  , "    { \"title\": \"Design Review\", \"reason\": \"Review the latest design mockups and prepare feedback\" }"
+  , "  ],"
+  , "  \"meeting_hours\": 1.5,"
+  , "  \"summary\": \"[DRYRUN] Today's briefing: 2 tasks scheduled (est. 3.5h), 1.5h meetings, 1 needs estimate.\""
   , "}"
   , "```"
   ]

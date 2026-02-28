@@ -5,6 +5,7 @@ module Coop.App.Monad
 
 import Coop.App.Env (Env (..))
 import qualified Coop.App.Env as Env
+import Coop.Effect.CalendarStore (CalendarStore (..))
 import Coop.Effect.TaskStore (TaskStore (..))
 import Coop.Effect.DocStore (DocStore (..))
 import Coop.Effect.LLM (LLM (..))
@@ -57,3 +58,6 @@ instance LLM AppM where
 instance Notifier AppM where
   notify n = do ops <- asks envNotifier; Env.opsNotify ops n
   replyThread c ts msg = do ops <- asks envNotifier; Env.opsReplyThread ops c ts msg
+
+instance CalendarStore AppM where
+  getEvents day = do ops <- asks envCalendarStore; Env.opsGetEvents ops day

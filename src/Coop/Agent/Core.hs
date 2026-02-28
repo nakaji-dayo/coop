@@ -5,7 +5,7 @@ module Coop.Agent.Core
   ) where
 
 import Coop.Agent.Context (buildContext, buildBriefingContext)
-import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..))
+import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..), MeetingPrep (..))
 import Coop.App.Env (Env (..))
 import Coop.App.Log (logInfo, logError, logWarn, logDebug)
 import Coop.Config (Config (..), SlackConfig (..))
@@ -13,6 +13,7 @@ import Coop.Domain.LLM (CompletionResponse (..))
 import Coop.Domain.Mention (ParsedMention (..), MentionType (..), parseMention)
 import Coop.Domain.Notification (Notification (..), NotificationLevel (..))
 import Coop.Domain.Task
+import Coop.Effect.CalendarStore (CalendarStore)
 import Coop.Effect.DocStore (DocStore)
 import Coop.Effect.LLM (LLM (..))
 import Coop.Effect.Notifier (Notifier (..))
@@ -31,7 +32,7 @@ import Katip (KatipContext)
 
 -- | Process a Slack event Value. Called asynchronously after returning 200.
 handleSlackEvent
-  :: (TaskStore m, DocStore m, LLM m, Notifier m, MonadReader (Env m) m, MonadIO m, KatipContext m)
+  :: (TaskStore m, DocStore m, LLM m, Notifier m, CalendarStore m, MonadReader (Env m) m, MonadIO m, KatipContext m)
   => Value -> m ()
 handleSlackEvent (Object obj) = do
   case KM.lookup "event" obj of
@@ -40,7 +41,7 @@ handleSlackEvent (Object obj) = do
 handleSlackEvent _ = pure ()
 
 processEvent
-  :: (TaskStore m, DocStore m, LLM m, Notifier m, MonadReader (Env m) m, MonadIO m, KatipContext m)
+  :: (TaskStore m, DocStore m, LLM m, Notifier m, CalendarStore m, MonadReader (Env m) m, MonadIO m, KatipContext m)
   => Object -> m ()
 processEvent event = do
   config <- asks envConfig
@@ -80,7 +81,7 @@ lookupText key obj = case KM.lookup (fromString $ T.unpack key) obj of
 
 -- | Handle a parsed mention: analyze, create task, notify.
 handleMention
-  :: (TaskStore m, DocStore m, LLM m, Notifier m, MonadReader (Env m) m, MonadIO m, KatipContext m)
+  :: (TaskStore m, DocStore m, LLM m, Notifier m, CalendarStore m, MonadReader (Env m) m, MonadIO m, KatipContext m)
   => ParsedMention -> m ()
 handleMention mention = do
   config <- asks envConfig
@@ -205,7 +206,7 @@ priorityToLevel Low      = Info
 
 -- | Run the daily briefing pipeline
 dailyBriefing
-  :: (TaskStore m, DocStore m, LLM m, Notifier m, MonadReader (Env m) m, MonadIO m, KatipContext m)
+  :: (TaskStore m, DocStore m, LLM m, Notifier m, CalendarStore m, MonadReader (Env m) m, MonadIO m, KatipContext m)
   => m ()
 dailyBriefing = do
   config <- asks envConfig
@@ -213,12 +214,13 @@ dailyBriefing = do
 
   logInfo "Starting daily briefing"
 
-  ctx <- buildBriefingContext
-
   now0 <- liftIO getCurrentTime
   tz <- liftIO getCurrentTimeZone
   let today = localDay (utcToLocalTime tz now0)
-      prompt = buildDailyBriefingPrompt ctx today
+
+  ctx <- buildBriefingContext today
+
+  let prompt = buildDailyBriefingPrompt ctx today tz
 
   resp <- complete prompt
   logInfo $ "Daily briefing LLM response: " <> T.take 200 (crResponseText resp)
@@ -253,7 +255,12 @@ formatDailyBriefing briefing = T.unlines $ concat
   , if null (dbSchedule briefing)
     then ["No tasks scheduled for today."]
     else map formatBriefingTask (dbSchedule briefing)
-         <> [totalHoursLine (dbSchedule briefing)]
+         <> [totalHoursLine (dbMeetingHours briefing) (dbSchedule briefing)]
+  , if null (dbMeetingPreps briefing) then []
+    else
+      [ ""
+      , "*Meeting Prep:*"
+      ] <> map formatMeetingPrep (dbMeetingPreps briefing)
   , if null (dbEstimateRequests briefing) then []
     else
       [ ""
@@ -272,16 +279,24 @@ formatBriefingTask bt = T.concat
   , " — " <> btReason bt
   ]
 
-totalHoursLine :: [BriefingTask] -> Text
-totalHoursLine tasks =
+totalHoursLine :: Double -> [BriefingTask] -> Text
+totalHoursLine mtgHours tasks =
   let total = sum $ map (fromMaybe 0 . btEstimateHours) tasks
-  in "\n:clock3: *Total: " <> formatHours total <> " / 7h available*"
+      available = max 0 (8.0 - mtgHours)
+  in "\n:clock3: *Total: " <> formatHours total <> " / " <> formatHours available <> " available* (8h - " <> formatHours mtgHours <> " meetings)"
 
 formatHours :: Double -> Text
 formatHours h
   | h < 1     = T.pack (show (round (h * 60) :: Int)) <> "min"
   | h == fromIntegral (round h :: Int) = T.pack (show (round h :: Int)) <> "h"
   | otherwise = T.pack (show h) <> "h"
+
+formatMeetingPrep :: MeetingPrep -> Text
+formatMeetingPrep mp = T.concat
+  [ ":clipboard: "
+  , "*" <> mpTitle mp <> "*"
+  , " — " <> mpReason mp
+  ]
 
 formatEstimateRequest :: EstimateRequest -> Text
 formatEstimateRequest er = T.concat

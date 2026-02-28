@@ -7,8 +7,10 @@ module Coop.Agent.Context
 import Coop.App.Env (Env (..))
 import Coop.App.Log (logDebug)
 import Coop.Config (Config (..), NotionConfig (..))
+import Coop.Domain.Calendar (CalendarEvent)
 import Coop.Domain.Doc (DocId (..), Document (..))
 import Coop.Domain.Task (Task (..), TaskId (..), TaskStatus (..))
+import Coop.Effect.CalendarStore (CalendarStore (..))
 import Coop.Effect.DocStore (DocStore (..))
 import Coop.Effect.TaskStore (TaskStore (..))
 import Control.Monad.Reader (MonadReader, asks)
@@ -17,13 +19,15 @@ import Data.Maybe (isNothing, catMaybes)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Map.Strict as Map
+import Data.Time (Day)
 import Katip (KatipContext)
 
 data AgentContext = AgentContext
-  { acGuidelines   :: Text
-  , acInstructions :: Text
-  , acExistingTasks :: [Task]
-  , acTaskBodies   :: Map.Map Text Text  -- ^ taskId -> body content (page + linked docs)
+  { acGuidelines      :: Text
+  , acInstructions    :: Text
+  , acExistingTasks   :: [Task]
+  , acTaskBodies      :: Map.Map Text Text  -- ^ taskId -> body content (page + linked docs)
+  , acCalendarEvents  :: [CalendarEvent]
   } deriving stock (Show)
 
 buildContext
@@ -46,21 +50,24 @@ buildContext = do
   logDebug $ "Instructions: " <> instructions
 
   pure AgentContext
-    { acGuidelines   = guidelines
-    , acInstructions = instructions
-    , acExistingTasks = tasks
-    , acTaskBodies   = Map.empty
+    { acGuidelines     = guidelines
+    , acInstructions   = instructions
+    , acExistingTasks  = tasks
+    , acTaskBodies     = Map.empty
+    , acCalendarEvents = []
     }
 
--- | Build context enriched with task body content for briefing
+-- | Build context enriched with task body content and calendar events for briefing
 buildBriefingContext
-  :: (DocStore m, TaskStore m, MonadReader (Env m) m, KatipContext m)
-  => m AgentContext
-buildBriefingContext = do
+  :: (DocStore m, TaskStore m, CalendarStore m, MonadReader (Env m) m, KatipContext m)
+  => Day -> m AgentContext
+buildBriefingContext today = do
   baseCtx <- buildContext
   bodies <- fetchTaskBodies (acExistingTasks baseCtx)
   logDebug $ "Fetched task bodies for " <> T.pack (show (Map.size bodies)) <> " tasks"
-  pure baseCtx { acTaskBodies = bodies }
+  events <- getEvents today
+  logDebug $ "Fetched " <> T.pack (show (length events)) <> " calendar events"
+  pure baseCtx { acTaskBodies = bodies, acCalendarEvents = events }
 
 -- | Fetch body content for active tasks without estimates (max 10)
 fetchTaskBodies

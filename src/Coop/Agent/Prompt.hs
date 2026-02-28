@@ -7,11 +7,13 @@ module Coop.Agent.Prompt
   , DailyBriefing (..)
   , BriefingTask (..)
   , EstimateRequest (..)
+  , MeetingPrep (..)
   , parseMentionAnalysis
   , parseDailyBriefing
   ) where
 
 import Coop.Agent.Context (AgentContext (..))
+import Coop.Domain.Calendar (CalendarEvent (..), ResponseStatus (..))
 import Coop.Domain.LLM (CompletionRequest (..), Message (..), Role (..))
 import Coop.Domain.Mention (ParsedMention (..))
 import Coop.Domain.Task (Task (..), TaskId (..), Priority (..), TaskStatus (..))
@@ -21,7 +23,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Map.Strict as Map
-import Data.Time (Day)
+import Data.Time (Day, TimeZone, utcToLocalTime, formatTime, defaultTimeLocale)
 import GHC.Generics (Generic)
 
 data MentionAnalysis = MentionAnalysis
@@ -149,9 +151,22 @@ formatTask task = "- [" <> prioText <> "] " <> taskTitle task <> ": " <> taskDes
 
 -- Daily Briefing types
 
+data MeetingPrep = MeetingPrep
+  { mpTitle  :: Text
+  , mpReason :: Text
+  } deriving stock (Eq, Show, Generic)
+
+instance FromJSON MeetingPrep where
+  parseJSON = withObject "MeetingPrep" $ \v ->
+    MeetingPrep
+      <$> v .: "title"
+      <*> v .: "reason"
+
 data DailyBriefing = DailyBriefing
   { dbSchedule        :: [BriefingTask]
   , dbEstimateRequests :: [EstimateRequest]
+  , dbMeetingPreps    :: [MeetingPrep]
+  , dbMeetingHours    :: Double
   , dbSummary         :: Text
   } deriving stock (Eq, Show, Generic)
 
@@ -175,6 +190,8 @@ instance FromJSON DailyBriefing where
     DailyBriefing
       <$> v .: "schedule"
       <*> (v .:? "estimate_requests" >>= pure . maybe [] id)
+      <*> (v .:? "meeting_preps" >>= pure . maybe [] id)
+      <*> (v .:? "meeting_hours" >>= pure . maybe 0 id)
       <*> v .: "summary"
 
 instance FromJSON BriefingTask where
@@ -199,8 +216,8 @@ parseDailyBriefing txt =
   let cleaned = extractJson txt
   in eitherDecodeStrict (TE.encodeUtf8 cleaned)
 
-buildDailyBriefingPrompt :: AgentContext -> Day -> CompletionRequest
-buildDailyBriefingPrompt ctx today = CompletionRequest
+buildDailyBriefingPrompt :: AgentContext -> Day -> TimeZone -> CompletionRequest
+buildDailyBriefingPrompt ctx today tz = CompletionRequest
   { crSystem = Just systemPrompt
   , crMessages = [ Message User userContent ]
   }
@@ -216,11 +233,16 @@ buildDailyBriefingPrompt ctx today = CompletionRequest
     isActive t = taskStatus t == Open || taskStatus t == InProgress
 
     bodies = acTaskBodies ctx
+    events = filter (not . isDeclined) (acCalendarEvents ctx)
 
     userContent = T.unlines
       [ "Generate a daily briefing for today."
       , ""
       , "Today: " <> T.pack (show today)
+      , ""
+      , "## Today's Calendar"
+      , if null events then "No events scheduled."
+        else T.unlines (map (formatCalendarEvent tz) events)
       , ""
       , "## Current Tasks"
       , if null activeTasks then "No active tasks."
@@ -234,6 +256,10 @@ buildDailyBriefingPrompt ctx today = CompletionRequest
       , "  \"estimate_requests\": ["
       , "    { \"task_id\": \"...\", \"title\": \"...\", \"reason\": \"Why estimate needed\" }"
       , "  ],"
+      , "  \"meeting_preps\": ["
+      , "    { \"title\": \"Meeting name\", \"reason\": \"What to prepare\" }"
+      , "  ],"
+      , "  \"meeting_hours\": 2.5,"
       , "  \"summary\": \"Brief overview of today's focus\""
       , "}"
       , ""
@@ -242,10 +268,38 @@ buildDailyBriefingPrompt ctx today = CompletionRequest
       , "- is_must=true for tasks that absolutely must be done today (due today, critical priority, blockers)"
       , "- is_must=false for tasks that ideally should be worked on but can slip"
       , "- estimate_hours: estimated hours to complete the task. If the task already has an Estimate value, convert it to hours. Otherwise, estimate based on the task title, body content, and linked documents"
-      , "- The total scheduled hours should fit within 6-7 available working hours per day. Be realistic"
+      , "- meeting_hours: from Today's Calendar above, determine which events are actual meetings (e.g. standup, 1on1, review) and sum their durations. Do NOT count non-meeting events such as focus/work blocks, personal events, reminders, lunch breaks, or time-off. Set to 0 if no meetings"
+      , "- Today's base work capacity is 8h. Available work time = 8h - meeting_hours. The total scheduled task hours must fit within the available time. Be realistic"
+      , "- Do NOT schedule tasks during meeting times — schedule work around meetings"
+      , "- Declined events are already excluded from the calendar above"
+      , "- meeting_preps: suggest preparation for meetings that seem to need it (e.g. 1on1s, design reviews, presentations). Include the meeting title and what to prepare"
       , "- estimate_requests: list tasks NOT in today's schedule that seem large but have no estimate"
       , "- IMPORTANT: Write all JSON field values (summary, reason) following the tone and style specified in the system instructions above."
       ]
+
+isDeclined :: CalendarEvent -> Bool
+isDeclined e = calResponseStatus e == Declined
+
+formatCalendarEvent :: TimeZone -> CalendarEvent -> Text
+formatCalendarEvent tz e =
+  let startLocal = utcToLocalTime tz (calStart e)
+      endLocal = utcToLocalTime tz (calEnd e)
+      timeFmt = formatTime defaultTimeLocale "%H:%M"
+      statusText = case calResponseStatus e of
+        Accepted    -> "Accepted"
+        Tentative   -> "Tentative"
+        NeedsAction -> "NeedsAction"
+        Declined    -> "Declined"
+  in T.concat
+    [ T.pack (timeFmt startLocal)
+    , "-"
+    , T.pack (timeFmt endLocal)
+    , " | "
+    , calTitle e
+    , " ("
+    , statusText
+    , ")"
+    ]
 
 formatBriefingInput :: Map.Map Text Text -> Task -> Text
 formatBriefingInput bodies task =
