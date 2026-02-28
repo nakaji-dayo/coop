@@ -20,6 +20,7 @@ import Data.Aeson.Types (Parser)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Map.Strict as Map
 import Data.Time (Day)
 import GHC.Generics (Generic)
 
@@ -155,11 +156,12 @@ data DailyBriefing = DailyBriefing
   } deriving stock (Eq, Show, Generic)
 
 data BriefingTask = BriefingTask
-  { btTaskId   :: Text
-  , btTitle    :: Text
-  , btPriority :: Text
-  , btReason   :: Text
-  , btIsMust   :: Bool
+  { btTaskId        :: Text
+  , btTitle         :: Text
+  , btPriority      :: Text
+  , btReason        :: Text
+  , btIsMust        :: Bool
+  , btEstimateHours :: Maybe Double
   } deriving stock (Eq, Show, Generic)
 
 data EstimateRequest = EstimateRequest
@@ -183,6 +185,7 @@ instance FromJSON BriefingTask where
       <*> v .: "priority"
       <*> v .: "reason"
       <*> v .: "is_must"
+      <*> v .:? "estimate_hours"
 
 instance FromJSON EstimateRequest where
   parseJSON = withObject "EstimateRequest" $ \v ->
@@ -212,6 +215,8 @@ buildDailyBriefingPrompt ctx today = CompletionRequest
     activeTasks = filter isActive (acExistingTasks ctx)
     isActive t = taskStatus t == Open || taskStatus t == InProgress
 
+    bodies = acTaskBodies ctx
+
     userContent = T.unlines
       [ "Generate a daily briefing for today."
       , ""
@@ -219,12 +224,12 @@ buildDailyBriefingPrompt ctx today = CompletionRequest
       , ""
       , "## Current Tasks"
       , if null activeTasks then "No active tasks."
-        else T.unlines (map formatBriefingInput activeTasks)
+        else T.unlines (map (formatBriefingInput bodies) activeTasks)
       , ""
       , "Create a daily schedule. Respond with a JSON object:"
       , "{"
       , "  \"schedule\": ["
-      , "    { \"task_id\": \"...\", \"title\": \"...\", \"priority\": \"High\", \"reason\": \"Why today\", \"is_must\": true }"
+      , "    { \"task_id\": \"...\", \"title\": \"...\", \"priority\": \"High\", \"reason\": \"Why today\", \"is_must\": true, \"estimate_hours\": 2.0 }"
       , "  ],"
       , "  \"estimate_requests\": ["
       , "    { \"task_id\": \"...\", \"title\": \"...\", \"reason\": \"Why estimate needed\" }"
@@ -236,19 +241,27 @@ buildDailyBriefingPrompt ctx today = CompletionRequest
       , "- Include only tasks that should be worked on TODAY"
       , "- is_must=true for tasks that absolutely must be done today (due today, critical priority, blockers)"
       , "- is_must=false for tasks that ideally should be worked on but can slip"
-      , "- estimate_requests: list tasks that seem large but have no estimate, to remind the user to add estimates"
+      , "- estimate_hours: estimated hours to complete the task. If the task already has an Estimate value, convert it to hours. Otherwise, estimate based on the task title, body content, and linked documents"
+      , "- The total scheduled hours should fit within 6-7 available working hours per day. Be realistic"
+      , "- estimate_requests: list tasks NOT in today's schedule that seem large but have no estimate"
       , "- IMPORTANT: Write all JSON field values (summary, reason) following the tone and style specified in the system instructions above."
       ]
 
-formatBriefingInput :: Task -> Text
-formatBriefingInput task = T.intercalate " | "
-  [ "ID:" <> unTaskId (taskId task)
-  , "Title:" <> taskTitle task
-  , "Priority:" <> prioText
-  , "Status:" <> statusText
-  , "Due:" <> maybe "none" (T.pack . show) (taskDueDate task)
-  , "Estimate:" <> maybe "none" id (taskEstimate task)
-  ]
+formatBriefingInput :: Map.Map Text Text -> Task -> Text
+formatBriefingInput bodies task =
+  let base = T.intercalate " | "
+        [ "ID:" <> unTaskId (taskId task)
+        , "Title:" <> taskTitle task
+        , "Priority:" <> prioText
+        , "Status:" <> statusText
+        , "Due:" <> maybe "none" (T.pack . show) (taskDueDate task)
+        , "Estimate:" <> maybe "none" id (taskEstimate task)
+        ]
+      bodySection = case Map.lookup (unTaskId (taskId task)) bodies of
+        Just content | not (T.null content) ->
+          "\n  Body: " <> T.take 2000 (T.replace "\n" " " content)
+        _ -> ""
+  in base <> bodySection
   where
     prioText = case taskPriority task of
       Critical -> "Critical"

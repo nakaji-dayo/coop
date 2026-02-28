@@ -4,7 +4,7 @@ module Coop.Agent.Core
   , dailyBriefing
   ) where
 
-import Coop.Agent.Context (buildContext)
+import Coop.Agent.Context (buildContext, buildBriefingContext)
 import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..))
 import Coop.App.Env (Env (..))
 import Coop.App.Log (logInfo, logError, logWarn, logDebug)
@@ -21,6 +21,7 @@ import Control.Monad.Reader (MonadReader, asks)
 import Data.Aeson (Value (..), Object)
 import Data.Aeson.Key (fromString)
 import qualified Data.Aeson.KeyMap as KM
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
@@ -212,7 +213,7 @@ dailyBriefing = do
 
   logInfo "Starting daily briefing"
 
-  ctx <- buildContext
+  ctx <- buildBriefingContext
 
   now0 <- liftIO getCurrentTime
   tz <- liftIO getCurrentTimeZone
@@ -252,6 +253,7 @@ formatDailyBriefing briefing = T.unlines $ concat
   , if null (dbSchedule briefing)
     then ["No tasks scheduled for today."]
     else map formatBriefingTask (dbSchedule briefing)
+         <> [totalHoursLine (dbSchedule briefing)]
   , if null (dbEstimateRequests briefing) then []
     else
       [ ""
@@ -264,8 +266,22 @@ formatBriefingTask bt = T.concat
   [ if btIsMust bt then ":red_circle: " else ":white_circle: "
   , "[" <> btPriority bt <> "] "
   , "<" <> notionPageUrl (TaskId (btTaskId bt)) <> "|" <> btTitle bt <> ">"
+  , case btEstimateHours bt of
+      Just h  -> " (" <> formatHours h <> ")"
+      Nothing -> ""
   , " — " <> btReason bt
   ]
+
+totalHoursLine :: [BriefingTask] -> Text
+totalHoursLine tasks =
+  let total = sum $ map (fromMaybe 0 . btEstimateHours) tasks
+  in "\n:clock3: *Total: " <> formatHours total <> " / 7h available*"
+
+formatHours :: Double -> Text
+formatHours h
+  | h < 1     = T.pack (show (round (h * 60) :: Int)) <> "min"
+  | h == fromIntegral (round h :: Int) = T.pack (show (round h :: Int)) <> "h"
+  | otherwise = T.pack (show h) <> "h"
 
 formatEstimateRequest :: EstimateRequest -> Text
 formatEstimateRequest er = T.concat
