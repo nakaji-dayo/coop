@@ -88,5 +88,5 @@ jobs:
           git push --delete origin latest || true
           gh release create latest artifacts/coop-* \
             --title "Latest (main)" \
-            --notes "Built from main branch ($(date -u +%Y-%m-%d %H:%M UTC))" \
+            --notes "Built from main branch ($(date -u '+%Y-%m-%d %H:%M UTC'))" \
             --prerelease
