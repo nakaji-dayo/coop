@@ -4,7 +4,7 @@ module Coop.Adapter.GoogleCalendar.Client
 
 import Coop.Adapter.GoogleCalendar.Types (GoogleEventsResponse (..), GoogleEvent (..),
                                            GoogleEventDateTime (..), GoogleAttendee (..))
-import Coop.Domain.Calendar (CalendarEvent (..), ResponseStatus (..))
+import Coop.Domain.Calendar (CalendarEvent (..), ResponseStatus (..), Visibility (..))
 import Data.Aeson (eitherDecode)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -56,7 +56,14 @@ toCalendarEvent ge = CalendarEvent
   , calStart          = resolveDateTime (geStart ge)
   , calEnd            = resolveDateTime (geEnd ge)
   , calResponseStatus = selfResponseStatus (geAttendees ge)
+  , calVisibility     = parseVisibility (geVisibility ge)
   }
+
+parseVisibility :: Maybe Text -> Visibility
+parseVisibility (Just "private")      = Private
+parseVisibility (Just "confidential") = Confidential
+parseVisibility (Just "public")       = Public
+parseVisibility _                     = DefaultVisibility
 
 -- | Resolve a GoogleEventDateTime to UTCTime (timed events or all-day fallback)
 resolveDateTime :: GoogleEventDateTime -> UTCTime

@@ -27,6 +27,7 @@ data GoogleEvent = GoogleEvent
   , geStart      :: GoogleEventDateTime
   , geEnd        :: GoogleEventDateTime
   , geAttendees  :: [GoogleAttendee]
+  , geVisibility :: Maybe Text
   } deriving stock (Eq, Show)
 
 instance FromJSON GoogleEvent where
@@ -37,6 +38,7 @@ instance FromJSON GoogleEvent where
       <*> v .: "start"
       <*> v .: "end"
       <*> (v .:? "attendees" >>= pure . maybe [] id)
+      <*> v .:? "visibility"
 
 -- | Event start/end time — supports both timed and all-day events
 data GoogleEventDateTime = GoogleEventDateTime

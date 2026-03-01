@@ -18,7 +18,7 @@ module Coop.Agent.Prompt
   ) where
 
 import Coop.Agent.Context (AgentContext (..))
-import Coop.Domain.Calendar (CalendarEvent (..), ResponseStatus (..))
+import Coop.Domain.Calendar (CalendarEvent (..), ResponseStatus (..), Visibility (..))
 import Coop.Domain.LLM (CompletionRequest (..), Message (..), Role (..))
 import Coop.Domain.Mention (ParsedMention (..))
 import Coop.Domain.Task (Task (..), TaskId (..), Priority (..), TaskStatus (..))
@@ -28,7 +28,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Map.Strict as Map
-import Data.Time (Day, DayOfWeek (..), TimeZone, utcToLocalTime, formatTime, defaultTimeLocale, dayOfWeek, addDays)
+import Data.Time (Day, DayOfWeek (..), TimeZone, utcToLocalTime, formatTime, defaultTimeLocale, dayOfWeek, addDays, diffUTCTime)
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 
@@ -291,17 +291,22 @@ formatCalendarEvent tz e =
   let startLocal = utcToLocalTime tz (calStart e)
       endLocal = utcToLocalTime tz (calEnd e)
       timeFmt = formatTime defaultTimeLocale "%H:%M"
+      durationMin = round (realToFrac (calEnd e `diffUTCTime` calStart e) / 60 :: Double) :: Int
       statusText = case calResponseStatus e of
         Accepted    -> "Accepted"
         Tentative   -> "Tentative"
         NeedsAction -> "NeedsAction"
         Declined    -> "Declined"
+      isPrivate = calVisibility e == Private || calVisibility e == Confidential
+      titleText = if isPrivate
+        then "Private event (" <> T.pack (show durationMin) <> "min)"
+        else calTitle e
   in T.concat
     [ T.pack (timeFmt startLocal)
     , "-"
     , T.pack (timeFmt endLocal)
     , " | "
-    , calTitle e
+    , titleText
     , " ("
     , statusText
     , ")"

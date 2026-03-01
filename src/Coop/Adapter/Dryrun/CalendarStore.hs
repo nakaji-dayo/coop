@@ -3,7 +3,7 @@ module Coop.Adapter.Dryrun.CalendarStore
   ) where
 
 import Coop.App.Env (CalendarStoreOps (..))
-import Coop.Domain.Calendar (CalendarEvent (..), ResponseStatus (..))
+import Coop.Domain.Calendar (CalendarEvent (..), ResponseStatus (..), Visibility (..))
 import Data.Time (Day, UTCTime (..), secondsToDiffTime)
 
 mkDryrunCalendarStoreOps :: (Applicative m) => CalendarStoreOps m
@@ -18,17 +18,20 @@ mockEvents day =
       , calStart = UTCTime day (secondsToDiffTime (10 * 3600))
       , calEnd   = UTCTime day (secondsToDiffTime (10 * 3600 + 900))
       , calResponseStatus = Accepted
+      , calVisibility = DefaultVisibility
       }
   , CalendarEvent
       { calTitle = "1on1 with Manager"
       , calStart = UTCTime day (secondsToDiffTime (14 * 3600))
       , calEnd   = UTCTime day (secondsToDiffTime (14 * 3600 + 1800))
       , calResponseStatus = Accepted
+      , calVisibility = DefaultVisibility
       }
   , CalendarEvent
       { calTitle = "Design Review"
       , calStart = UTCTime day (secondsToDiffTime (16 * 3600))
       , calEnd   = UTCTime day (secondsToDiffTime (17 * 3600))
       , calResponseStatus = Tentative
+      , calVisibility = DefaultVisibility
       }
   ]
