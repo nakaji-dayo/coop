@@ -108,6 +108,6 @@ mkEnv config logEnv manager = do
         , envTaskStore     = mkLiveTaskStoreOps notionCfg manager
         , envDocStore      = mkLiveDocStoreOps (notionApiKey notionCfg) manager
         , envLLM           = llmOps
-        , envNotifier      = mkLiveNotifierOps (slackBotToken slackCfg) manager
+        , envNotifier      = mkLiveNotifierOps logEnv (slackBotToken slackCfg) manager
         , envCalendarStore = calendarOps
         }

@@ -5,23 +5,27 @@ module Coop.Adapter.Slack.Notifier
 import Coop.App.Env (NotifierOps (..))
 import Coop.Domain.Notification (Notification (..))
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Aeson (encode, object, (.=))
+import Data.Aeson (encode, object, (.=), decode, withObject, (.:))
+import Data.Aeson.Types (parseMaybe, Parser)
 import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.ByteString.Lazy as LBS
+import Katip
 import Network.HTTP.Client
 import Network.HTTP.Types.Status (statusCode)
 
-mkLiveNotifierOps :: (MonadIO m) => Text -> Manager -> NotifierOps m
-mkLiveNotifierOps botToken manager = NotifierOps
+mkLiveNotifierOps :: (MonadIO m) => LogEnv -> Text -> Manager -> NotifierOps m
+mkLiveNotifierOps logEnv botToken manager = NotifierOps
   { opsNotify = \notif -> liftIO $ do
-      slackPostMessage manager botToken (notifChannel notif) (notifText notif) Nothing
+      slackPostMessage logEnv manager botToken (notifChannel notif) (notifText notif) Nothing
 
   , opsReplyThread = \channel ts msg -> liftIO $ do
-      slackPostMessage manager botToken channel msg (Just ts)
+      slackPostMessage logEnv manager botToken channel msg (Just ts)
   }
 
-slackPostMessage :: Manager -> Text -> Text -> Text -> Maybe Text -> IO ()
-slackPostMessage manager botToken channel text mThreadTs = do
+slackPostMessage :: LogEnv -> Manager -> Text -> Text -> Text -> Maybe Text -> IO ()
+slackPostMessage logEnv manager botToken channel text mThreadTs = do
   initReq <- parseRequest "https://slack.com/api/chat.postMessage"
   let body = object $
         [ "channel" .= channel
@@ -35,8 +39,23 @@ slackPostMessage manager botToken channel text mThreadTs = do
             ]
         , requestBody = RequestBodyLBS (encode body)
         }
+  logM logEnv "slack" DebugS $ logStr $ "postMessage to channel=" <> channel
   resp <- httpLbs req manager
   let status = statusCode (responseStatus resp)
+      respBody = responseBody resp
   if status /= 200
-    then putStrLn $ "Slack API error: HTTP " <> show status
-    else pure ()
+    then logM logEnv "slack" ErrorS $ logStr $
+           "HTTP error: " <> T.pack (show status) <> " " <> T.pack (show (LBS.toStrict respBody))
+    else do
+      let mError = parseMaybe (withObject "SlackResp" $ \v -> do
+            ok <- v .: "ok" :: Parser Bool
+            if ok then pure Nothing
+            else Just <$> v .: "error") =<< decode respBody
+      case mError of
+        Just (Just errMsg) ->
+          logM logEnv "slack" ErrorS $ logStr $ "API error: " <> (errMsg :: Text)
+        _ -> pure ()
+
+logM :: LogEnv -> Namespace -> Severity -> LogStr -> IO ()
+logM logEnv ns sev msg =
+  runKatipContextT logEnv () ns $ logFM sev msg
