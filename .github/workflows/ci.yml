@@ -27,7 +27,9 @@ jobs:
 
       - uses: actions/cache@v4
         with:
-          path: ${{ steps.setup.outputs.cabal-store }}
+          path: |
+            ${{ steps.setup.outputs.cabal-store }}
+            dist-newstyle
           key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-${{ hashFiles('**/cabal.project.freeze') }}
           restore-keys: |
             ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-
@@ -62,10 +64,12 @@ jobs:
 
       - uses: actions/cache@v4
         with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: release-${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-${{ hashFiles('**/cabal.project.freeze') }}
+          path: |
+            ${{ steps.setup.outputs.cabal-store }}
+            dist-newstyle
+          key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-${{ hashFiles('**/cabal.project.freeze') }}
           restore-keys: |
-            release-${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-
+            ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-
 
       - name: Build
         run: cabal build exe:coop
