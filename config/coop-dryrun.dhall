@@ -43,6 +43,8 @@
   }
 , cfgScheduler =
   { schedulerBriefingCron = "0 9 * * *"
+  , schedulerWeeklyBriefingCron = "-"
+  , schedulerWeeklyAvailableHours = 30
   }
 , cfgGoogleCalendar =
   { googleClientId = ""

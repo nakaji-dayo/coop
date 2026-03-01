@@ -3,13 +3,14 @@ module Coop.Agent.Core
   , handleSlackEvent
   , processEvent
   , dailyBriefing
+  , weeklyBriefing
   ) where
 
-import Coop.Agent.Context (buildContext, buildBriefingContext)
-import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..), MeetingPrep (..))
+import Coop.Agent.Context (buildContext, buildBriefingContext, buildWeeklyBriefingContext)
+import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, buildWeeklyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, parseWeeklyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..), MeetingPrep (..), WeeklyBriefing (..), LongTermMilestone (..), WeeklyTask (..))
 import Coop.App.Env (Env (..))
 import Coop.App.Log (logInfo, logError, logWarn, logDebug)
-import Coop.Config (Config (..), SlackConfig (..))
+import Coop.Config (Config (..), SlackConfig (..), SchedulerConfig (..))
 import Coop.Domain.LLM (CompletionResponse (..))
 import Coop.Domain.Mention (ParsedMention (..), MentionType (..), parseMention)
 import Coop.Domain.Notification (Notification (..), NotificationLevel (..))
@@ -305,3 +306,94 @@ formatEstimateRequest er = T.concat
   , "<" <> notionPageUrl (TaskId (erTaskId er)) <> "|" <> erTitle er <> ">"
   , " — " <> erReason er
   ]
+
+-- | Run the weekly briefing pipeline
+weeklyBriefing
+  :: (TaskStore m, DocStore m, LLM m, Notifier m, MonadReader (Env m) m, MonadIO m, KatipContext m)
+  => m ()
+weeklyBriefing = do
+  config <- asks envConfig
+  let notifyChannel = slackNotifyChannel (cfgSlack config)
+      availableHours = schedulerWeeklyAvailableHours (cfgScheduler config)
+
+  logInfo "Starting weekly briefing"
+
+  now0 <- liftIO getCurrentTime
+  tz <- liftIO getCurrentTimeZone
+  let today = localDay (utcToLocalTime tz now0)
+
+  ctx <- buildWeeklyBriefingContext
+
+  let prompt = buildWeeklyBriefingPrompt ctx today availableHours
+
+  resp <- complete prompt
+  logInfo $ "Weekly briefing LLM response: " <> T.take 200 (crResponseText resp)
+
+  let briefingText = case parseWeeklyBriefing (crResponseText resp) of
+        Left err ->
+          T.unlines
+            [ ":calendar: *Weekly Briefing*"
+            , ""
+            , crResponseText resp
+            , ""
+            , "_(" <> T.pack err <> ")_"
+            ]
+        Right briefing -> formatWeeklyBriefing briefing
+
+  notify Notification
+    { notifChannel = notifyChannel
+    , notifText = briefingText
+    , notifLevel = Info
+    }
+
+  logInfo "Weekly briefing completed"
+
+formatWeeklyBriefing :: WeeklyBriefing -> Text
+formatWeeklyBriefing briefing = T.unlines $ concat
+  [ [ ":calendar: *Weekly Briefing*"
+    , ""
+    , wbSummary briefing
+    ]
+  , if null (wbLongTermMilestones briefing) then []
+    else
+      [ ""
+      , "*Long-term Milestones:*"
+      ] <> map formatMilestone (wbLongTermMilestones briefing)
+  , [ ""
+    , "*This Week's Tasks:*"
+    ]
+  , if null (wbWeeklyTasks briefing)
+    then ["No tasks scheduled for this week."]
+    else map formatWeeklyTask (wbWeeklyTasks briefing)
+         <> [weeklyTotalLine (wbWeeklyTasks briefing)]
+  , if T.null (wbGuidelineFeedback briefing) then []
+    else
+      [ ""
+      , "*Guideline Feedback:*"
+      , wbGuidelineFeedback briefing
+      ]
+  ]
+
+formatMilestone :: LongTermMilestone -> Text
+formatMilestone ms = T.concat
+  [ ":dart: *" <> ltGoal ms <> "* (" <> ltTimeframe ms <> ")"
+  , if null (ltKeyTasks ms) then ""
+    else "\n    " <> T.intercalate ", " (ltKeyTasks ms)
+  ]
+
+formatWeeklyTask :: WeeklyTask -> Text
+formatWeeklyTask wt = T.concat
+  [ ":pushpin: "
+  , "[" <> wtPriority wt <> "] "
+  , "<" <> notionPageUrl (TaskId (wtTaskId wt)) <> "|" <> wtTitle wt <> ">"
+  , case wtEstimateHours wt of
+      Just h  -> " (" <> formatHours h <> ")"
+      Nothing -> ""
+  , " — " <> wtReason wt
+  , "\n    _" <> wtMilestoneLink wt <> "_"
+  ]
+
+weeklyTotalLine :: [WeeklyTask] -> Text
+weeklyTotalLine tasks =
+  let total = sum $ map (fromMaybe 0 . wtEstimateHours) tasks
+  in "\n:clock3: *Total: " <> formatHours total <> "*"

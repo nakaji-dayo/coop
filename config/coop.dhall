@@ -46,6 +46,8 @@ in
   }
 , cfgScheduler =
   { schedulerBriefingCron = env:SCHEDULER_BRIEFING_CRON as Text ? "* * * * *"
+  , schedulerWeeklyBriefingCron = env:SCHEDULER_WEEKLY_BRIEFING_CRON as Text ? "-"
+  , schedulerWeeklyAvailableHours = 30
   }
 , cfgGoogleCalendar =
   { googleClientId = env:GOOGLE_CLIENT_ID as Text ? ""

@@ -2,14 +2,19 @@ module Coop.Agent.Prompt
   ( buildMentionAnalysisPrompt
   , buildBotCommandPrompt
   , buildDailyBriefingPrompt
+  , buildWeeklyBriefingPrompt
   , MentionAnalysis (..)
   , AnalysisResult (..)
   , DailyBriefing (..)
   , BriefingTask (..)
   , EstimateRequest (..)
   , MeetingPrep (..)
+  , WeeklyBriefing (..)
+  , LongTermMilestone (..)
+  , WeeklyTask (..)
   , parseMentionAnalysis
   , parseDailyBriefing
+  , parseWeeklyBriefing
   ) where
 
 import Coop.Agent.Context (AgentContext (..))
@@ -23,8 +28,9 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Map.Strict as Map
-import Data.Time (Day, TimeZone, utcToLocalTime, formatTime, defaultTimeLocale)
+import Data.Time (Day, DayOfWeek (..), TimeZone, utcToLocalTime, formatTime, defaultTimeLocale, dayOfWeek, addDays)
 import GHC.Generics (Generic)
+import Numeric.Natural (Natural)
 
 data MentionAnalysis = MentionAnalysis
   { maPriority    :: Priority
@@ -327,3 +333,120 @@ formatBriefingInput bodies task =
       InProgress -> "InProgress"
       Done       -> "Done"
       Archived   -> "Archived"
+
+-- Weekly Briefing types
+
+data WeeklyBriefing = WeeklyBriefing
+  { wbLongTermMilestones :: [LongTermMilestone]
+  , wbWeeklyTasks        :: [WeeklyTask]
+  , wbGuidelineFeedback  :: Text
+  , wbSummary            :: Text
+  } deriving stock (Eq, Show, Generic)
+
+data LongTermMilestone = LongTermMilestone
+  { ltGoal      :: Text
+  , ltTimeframe :: Text
+  , ltKeyTasks  :: [Text]
+  } deriving stock (Eq, Show, Generic)
+
+data WeeklyTask = WeeklyTask
+  { wtTaskId        :: Text
+  , wtTitle         :: Text
+  , wtPriority      :: Text
+  , wtEstimateHours :: Maybe Double
+  , wtMilestoneLink :: Text
+  , wtReason        :: Text
+  } deriving stock (Eq, Show, Generic)
+
+instance FromJSON WeeklyBriefing where
+  parseJSON = withObject "WeeklyBriefing" $ \v ->
+    WeeklyBriefing
+      <$> v .: "long_term_milestones"
+      <*> v .: "weekly_tasks"
+      <*> v .: "guideline_feedback"
+      <*> v .: "summary"
+
+instance FromJSON LongTermMilestone where
+  parseJSON = withObject "LongTermMilestone" $ \v ->
+    LongTermMilestone
+      <$> v .: "goal"
+      <*> v .: "timeframe"
+      <*> v .: "key_tasks"
+
+instance FromJSON WeeklyTask where
+  parseJSON = withObject "WeeklyTask" $ \v ->
+    WeeklyTask
+      <$> v .: "task_id"
+      <*> v .: "title"
+      <*> v .: "priority"
+      <*> v .:? "estimate_hours"
+      <*> v .: "milestone_link"
+      <*> v .: "reason"
+
+parseWeeklyBriefing :: Text -> Either String WeeklyBriefing
+parseWeeklyBriefing txt =
+  let cleaned = extractJson txt
+  in eitherDecodeStrict (TE.encodeUtf8 cleaned)
+
+buildWeeklyBriefingPrompt :: AgentContext -> Day -> Natural -> CompletionRequest
+buildWeeklyBriefingPrompt ctx today availableHours = CompletionRequest
+  { crSystem = Just systemPrompt
+  , crMessages = [ Message User userContent ]
+  }
+  where
+    systemPrompt = T.unlines
+      [ acInstructions ctx
+      , ""
+      , "## Behavioral Guidelines"
+      , acGuidelines ctx
+      ]
+
+    activeTasks = filter isActive (acExistingTasks ctx)
+    isActive t = taskStatus t == Open || taskStatus t == InProgress
+
+    bodies = acTaskBodies ctx
+
+    -- Calculate week range (Monday to Sunday)
+    dow = dayOfWeek today
+    mondayOffset = case dow of
+      Monday    -> 0
+      Tuesday   -> -1
+      Wednesday -> -2
+      Thursday  -> -3
+      Friday    -> -4
+      Saturday  -> -5
+      Sunday    -> -6
+    weekStart = addDays mondayOffset today
+    weekEnd = addDays 6 weekStart
+
+    userContent = T.unlines
+      [ "Generate a weekly briefing."
+      , ""
+      , "Today: " <> T.pack (show today)
+      , "This week: " <> T.pack (show weekStart) <> " - " <> T.pack (show weekEnd)
+      , "Available work hours this week: " <> T.pack (show availableHours) <> "h"
+      , ""
+      , "## Current Tasks"
+      , if null activeTasks then "No active tasks."
+        else T.unlines (map (formatBriefingInput bodies) activeTasks)
+      , ""
+      , "Create a weekly plan. Respond with a JSON object:"
+      , "{"
+      , "  \"long_term_milestones\": ["
+      , "    { \"goal\": \"...\", \"timeframe\": \"1 month\", \"key_tasks\": [\"task title 1\", \"task title 2\"] }"
+      , "  ],"
+      , "  \"weekly_tasks\": ["
+      , "    { \"task_id\": \"...\", \"title\": \"...\", \"priority\": \"High\", \"estimate_hours\": 4.0, \"milestone_link\": \"Which milestone this supports\", \"reason\": \"Why this week\" }"
+      , "  ],"
+      , "  \"guideline_feedback\": \"Constructive suggestion on working guidelines\","
+      , "  \"summary\": \"Brief overview of the week's focus\""
+      , "}"
+      , ""
+      , "Rules:"
+      , "- long_term_milestones: derive from behavioral guidelines and existing tasks. These are big-picture goals (1-3 months horizon). Each should reference existing tasks that contribute to it"
+      , "- weekly_tasks: concrete tasks to work on THIS week. Select and prioritize from existing tasks. Total estimate_hours must fit within available work hours (" <> T.pack (show availableHours) <> "h)"
+      , "- estimate_hours: estimated hours to complete. If the task already has an Estimate value, convert it to hours. Otherwise, estimate based on the task content"
+      , "- milestone_link: explain how this task connects to a long-term milestone"
+      , "- guideline_feedback: review the behavioral guidelines and suggest one constructive improvement or confirmation that the current direction is good"
+      , "- IMPORTANT: Write all JSON field values (summary, reason, goal, guideline_feedback) following the tone and style specified in the system instructions above."
+      ]

@@ -18,7 +18,10 @@ dryrunResponse req =
   let userMsg = case filter (\m -> msgRole m == User) (crMessages req) of
         (m:_) -> msgContent m
         []    -> "no message"
-  in if "daily briefing" `T.isInfixOf` T.toLower userMsg
+      lower = T.toLower userMsg
+  in if "weekly briefing" `T.isInfixOf` lower
+     then dryrunWeeklyBriefingResponse
+     else if "daily briefing" `T.isInfixOf` lower
      then dryrunBriefingResponse
      else dryrunMentionResponse userMsg
 
@@ -55,6 +58,24 @@ dryrunBriefingResponse = T.unlines
   , "  ],"
   , "  \"meeting_hours\": 1.5,"
   , "  \"summary\": \"[DRYRUN] Today's briefing: 2 tasks scheduled (est. 3.5h), 1.5h meetings, 1 needs estimate.\""
+  , "}"
+  , "```"
+  ]
+
+dryrunWeeklyBriefingResponse :: T.Text
+dryrunWeeklyBriefingResponse = T.unlines
+  [ "```json"
+  , "{"
+  , "  \"long_term_milestones\": ["
+  , "    { \"goal\": \"[DRYRUN] Ship v2.0 release\", \"timeframe\": \"1 month\", \"key_tasks\": [\"[DRYRUN] Sample task\", \"[DRYRUN] Another task\"] },"
+  , "    { \"goal\": \"[DRYRUN] Improve test coverage\", \"timeframe\": \"2-3 months\", \"key_tasks\": [\"[DRYRUN] Another task\"] }"
+  , "  ],"
+  , "  \"weekly_tasks\": ["
+  , "    { \"task_id\": \"dryrun-task-1\", \"title\": \"[DRYRUN] Sample task\", \"priority\": \"High\", \"estimate_hours\": 8.0, \"milestone_link\": \"Supports v2.0 release\", \"reason\": \"Dryrun mode sample\" },"
+  , "    { \"task_id\": \"dryrun-task-2\", \"title\": \"[DRYRUN] Another task\", \"priority\": \"Medium\", \"estimate_hours\": 4.0, \"milestone_link\": \"Improves test coverage\", \"reason\": \"Dryrun mode sample\" }"
+  , "  ],"
+  , "  \"guideline_feedback\": \"[DRYRUN] Current guidelines look good. Consider adding a section on code review turnaround time.\","
+  , "  \"summary\": \"[DRYRUN] This week: focus on v2.0 release tasks (12h planned out of 30h available).\""
   , "}"
   , "```"
   ]

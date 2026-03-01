@@ -7,7 +7,7 @@ import Coop.App.Env (Env (..))
 import Coop.App.Monad (AppM (..), runAppM)
 import Coop.App.Log (logInfo, logError, logWarn)
 import Coop.Config (Config (..), SlackConfig (..))
-import Coop.Server.API (API, api, HealthAPI, healthApi)
+import Coop.Server.API (api, healthApi)
 import Coop.Agent.Core (handleSlackEvent)
 import Control.Concurrent (forkIO)
 import Control.Exception (try, SomeException)
@@ -20,7 +20,6 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import Network.Wai (Application)
 import Servant
 import Crypto.MAC.HMAC (hmac, HMAC)
 import Crypto.Hash (SHA256)

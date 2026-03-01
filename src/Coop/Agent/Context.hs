@@ -2,6 +2,7 @@ module Coop.Agent.Context
   ( AgentContext (..)
   , buildContext
   , buildBriefingContext
+  , buildWeeklyBriefingContext
   ) where
 
 import Coop.App.Env (Env (..))
@@ -68,6 +69,16 @@ buildBriefingContext today = do
   events <- getEvents today
   logDebug $ "Fetched " <> T.pack (show (length events)) <> " calendar events"
   pure baseCtx { acTaskBodies = bodies, acCalendarEvents = events }
+
+-- | Build context with task bodies but no calendar events for weekly briefing
+buildWeeklyBriefingContext
+  :: (DocStore m, TaskStore m, MonadReader (Env m) m, KatipContext m)
+  => m AgentContext
+buildWeeklyBriefingContext = do
+  baseCtx <- buildContext
+  bodies <- fetchTaskBodies (acExistingTasks baseCtx)
+  logDebug $ "Fetched task bodies for " <> T.pack (show (Map.size bodies)) <> " tasks"
+  pure baseCtx { acTaskBodies = bodies }
 
 -- | Fetch body content for active tasks without estimates (max 10)
 fetchTaskBodies

@@ -18,7 +18,7 @@ withLogEnv minLevel action = do
   scribe <- mkHandleScribe ColorIfTerminal stdout (permitItem minLevel) V2
   le' <- registerScribe "stdout" scribe defaultScribeSettings le
   result <- action le'
-  closeScribes le'
+  _ <- closeScribes le'
   pure result
 
 parseLogLevel :: Text -> Severity
