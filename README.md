@@ -5,7 +5,7 @@
 # coop
 
 AIをバックエンドとした、タスク管理・Slackメンション対応を支援するツール。
-Slackでメンションされると行動指針を踏まえた優先度判定付きの通知が通知用チャンネルに届き、Notionにタスクが作られる。
+Slackでメンションされると行動指針を踏まえた優先度判定付きの通知が届き（チャンネルまたはDM）、Notionにタスクが作られる。
 
 ```
    Slack @mentions      Your Guidelines     Task Store          Calendar
@@ -51,7 +51,7 @@ Slackでメンションされると行動指針を踏まえた優先度判定付
                         ▼
              ┌─────────────────────┐
              │  Slack notification │
-             │  channel            │
+             │  channel or DM      │
              │                     │
              │  Everything in one  │
              │  place. You act.    │
@@ -121,7 +121,7 @@ cabal run coop -- --config config/coop.dhall
 | `SLACK_SIGNING_SECRET` | Slack App の Signing Secret |
 | `SLACK_BOT_USER_ID` | Bot の User ID（`U...`） |
 | `SLACK_MONITORED_USER_ID` | 監視対象ユーザーの User ID（`U...`） |
-| `SLACK_NOTIFY_CHANNEL` | 通知先チャンネルID（`C...`） |
+| `SLACK_NOTIFY_CHANNEL` | 通知先（チャンネルID `C...` またはユーザーID `U...`）。ユーザーIDを指定するとDMに届く |
 | `SLACK_APP_TOKEN` | Slack App-Level Token（Socket Mode用, `xapp-...`） |
 | `SLACK_SOCKET_MODE` | `True` で Socket Mode、省略または `False` で Webhook |
 | `COOP_DRYRUN` | `True` で Dryrun モード |
