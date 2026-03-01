@@ -49,6 +49,7 @@ library
         Coop.Adapter.Notion.Client
         Coop.Adapter.Notion.DocStore
         Coop.Adapter.Notion.TaskStore
+        Coop.Adapter.Slack.History
         Coop.Adapter.Slack.Notifier
         Coop.Adapter.Slack.SocketMode
         Coop.Adapter.GoogleCalendar.Types
@@ -57,6 +58,7 @@ library
         Coop.Adapter.GoogleCalendar.CalendarStore
         Coop.Server.API
         Coop.Server.Handlers
+        Coop.Agent.CatchUp
         Coop.Agent.Core
         Coop.Agent.Context
         Coop.Agent.Prompt

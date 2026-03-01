@@ -12,6 +12,7 @@ in
   , slackNotifyChannel = env:SLACK_NOTIFY_CHANNEL as Text
   , slackAppToken = env:SLACK_APP_TOKEN as Text ? ""
   , slackConnectionMode = if env:SLACK_SOCKET_MODE ? False then ConnMode.SocketMode else ConnMode.Webhook
+  , slackCatchupChannels = env:SLACK_CATCHUP_CHANNELS as Text ? ""
   }
 , cfgLLM =
   { llmBackend = env:LLM_BACKEND as Text ? "Claude"

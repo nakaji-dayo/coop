@@ -1,6 +1,7 @@
 module Main where
 
 import Coop.Config (loadConfig, Config (..), RunMode (..), ConnectionMode (..), DryrunConfig (..), SlackConfig (..), NotionConfig (..), LLMConfig (..), GoogleCalendarConfig (..))
+import Coop.Agent.CatchUp (runCatchUp)
 import Coop.App.Env (Env (..))
 import Coop.App.Log (withLogEnv, parseLogLevel)
 import Coop.App.Monad (AppM)
@@ -51,6 +52,7 @@ main = do
       withLogEnv (parseLogLevel (cfgLogLevel config)) $ \logEnv -> do
         manager <- newTlsManager
         env <- mkEnv config logEnv manager
+        runCatchUp env
         let port = fromIntegral (cfgPort config)
         TIO.putStrLn $ "Starting coop on port " <> pack (show port)
         case slackConnectionMode (cfgSlack config) of

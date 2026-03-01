@@ -33,6 +33,7 @@ data SlackConfig = SlackConfig
   , slackNotifyChannel     :: Text
   , slackAppToken          :: Text
   , slackConnectionMode    :: ConnectionMode
+  , slackCatchupChannels   :: Text  -- ^ Comma-separated channel IDs for offline catch-up
   } deriving stock (Eq, Show, Generic)
     deriving anyclass (FromDhall)
 

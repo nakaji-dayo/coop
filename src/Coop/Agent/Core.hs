@@ -1,6 +1,7 @@
 module Coop.Agent.Core
   ( handleMention
   , handleSlackEvent
+  , processEvent
   , dailyBriefing
   ) where
 

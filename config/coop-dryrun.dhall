@@ -9,6 +9,7 @@
   , slackNotifyChannel = "C_DRYRUN_NOTIFY"
   , slackAppToken = ""
   , slackConnectionMode = < Webhook | SocketMode >.Webhook
+  , slackCatchupChannels = ""
   }
 , cfgLLM =
   { llmBackend = "Claude"
