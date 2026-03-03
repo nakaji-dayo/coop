@@ -38,7 +38,10 @@ mkLiveTaskStoreOps notionCfg manager =
 
   , opsListTasks = liftIO $ do
       let url = "https://api.notion.com/v1/databases/" <> unpack databaseId <> "/query"
-      result <- notionPost manager apiKey url NotionDatabaseQuery
+          assigneeProp = if T.null (notionPropAssignee notionCfg) then Nothing else Just (notionPropAssignee notionCfg)
+          assigneeUser = if T.null (notionAssigneeUserId notionCfg) then Nothing else Just (notionAssigneeUserId notionCfg)
+          query = NotionDatabaseQuery assigneeProp assigneeUser
+      result <- notionPost manager apiKey url query
       case result of
         Left _err -> pure []
         Right resp -> pure $ map (pageToTask notionCfg) (nqrResults resp)

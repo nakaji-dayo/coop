@@ -48,10 +48,19 @@ instance FromJSON NotionPage where
     <*> v .: "properties"
 
 data NotionDatabaseQuery = NotionDatabaseQuery
-  deriving stock (Eq, Show, Generic)
+  { ndbqAssigneeProp   :: Maybe Text
+  , ndbqAssigneeUserId :: Maybe Text
+  } deriving stock (Eq, Show, Generic)
 
 instance ToJSON NotionDatabaseQuery where
-  toJSON _ = object []
+  toJSON q = case (ndbqAssigneeProp q, ndbqAssigneeUserId q) of
+    (Just prop, Just uid) -> object
+      [ "filter" .= object
+          [ "property" .= prop
+          , "people" .= object [ "contains" .= uid ]
+          ]
+      ]
+    _ -> object []
 
 data NotionQueryResponse = NotionQueryResponse
   { nqrResults :: [NotionPage]

@@ -141,6 +141,8 @@ cabal run coop -- --config config/coop.dhall
 | `NOTION_STATUS_OPEN` | Open状態の表示名（デフォルト: `Open`） |
 | `NOTION_STATUS_IN_PROGRESS` | InProgress状態の表示名（デフォルト: `In Progress`） |
 | `NOTION_STATUS_DONE` | Done状態の表示名（デフォルト: `Done`） |
+| `NOTION_PROP_ASSIGNEE` | 担当者プロパティ名（空で無効。デフォルト: 空） |
+| `NOTION_ASSIGNEE_USER_ID` | タスク担当者の Notion User ID（タスク取得時のフィルターに使用） |
 
 ## Docker
 
