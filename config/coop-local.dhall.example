@@ -1,0 +1,31 @@
+-- Copy this file to config/coop-local.dhall and fill in your values.
+-- Usage: cabal run coop -- --config config/coop-local.dhall
+let base = ./coop.dhall
+
+in      base
+    //  { cfgSlack =
+                base.cfgSlack
+            //  { slackBotToken = "xoxb-YOUR-TOKEN"
+                , slackSigningSecret = "YOUR-SIGNING-SECRET"
+                , slackBotUserId = "U_YOUR_BOT"
+                , slackMonitoredUserId = "U_YOUR_USER"
+                , slackNotifyChannel = "C_YOUR_CHANNEL"
+                , slackAppToken = "xapp-YOUR-APP-TOKEN"
+                , slackConnectionMode = < Webhook | SocketMode >.SocketMode
+                }
+        , cfgLLM =
+                base.cfgLLM
+            //  { llmClaude =
+                        base.cfgLLM.llmClaude
+                    //  { claudeApiKey = "sk-ant-YOUR-KEY" }
+                }
+        , cfgNotion =
+                base.cfgNotion
+            //  { notionApiKey = "ntn_YOUR-KEY"
+                , notionTaskDatabaseId = "YOUR-DATABASE-ID"
+                , notionGuidelinesPageId = "YOUR-PAGE-ID"
+                , notionInstructionsPageId = "YOUR-PAGE-ID"
+                }
+        , cfgScheduler =
+            base.cfgScheduler // { schedulerBriefingCron = "0 9 * * *" }
+        }
