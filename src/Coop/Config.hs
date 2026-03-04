@@ -11,9 +11,12 @@ module Coop.Config
   , SchedulerConfig (..)
   , GoogleCalendarConfig (..)
   , loadConfig
+  , normalizeNotionId
   ) where
 
+import Data.Char (isHexDigit)
 import Data.Text (Text)
+import qualified Data.Text as T
 import Dhall (FromDhall, Generic, Natural, auto, inputFile)
 import GHC.Generics ()
 
@@ -108,4 +111,33 @@ data Config = Config
     deriving anyclass (FromDhall)
 
 loadConfig :: FilePath -> IO Config
-loadConfig = inputFile auto
+loadConfig path = do
+  cfg <- inputFile auto path
+  let notion = cfgNotion cfg
+      notion' = notion
+        { notionTaskDatabaseId    = normalizeNotionId (notionTaskDatabaseId notion)
+        , notionGuidelinesPageId  = normalizeNotionId (notionGuidelinesPageId notion)
+        , notionInstructionsPageId = normalizeNotionId (notionInstructionsPageId notion)
+        }
+  pure cfg { cfgNotion = notion' }
+
+-- | Normalize a Notion ID field: extract 32-hex ID from a Notion URL,
+-- or return the input unchanged if it's already a raw ID.
+normalizeNotionId :: Text -> Text
+normalizeNotionId input
+  | "notion.so/" `T.isInfixOf` input =
+      let fragments = drop 1 $ T.splitOn "notion.so/" input
+      in case fragments of
+           (f:_) -> extractId f
+           []    -> input
+  | otherwise = input
+  where
+    extractId fragment =
+      let cleaned  = T.takeWhile (\c -> c /= '?' && c /= '#' && c /= ' ' && c /= '\n') fragment
+          segments = T.splitOn "/" cleaned
+          lastSeg  = if null segments then "" else last segments
+          stripped = T.filter (/= '-') lastSeg
+          candidate = T.takeEnd 32 stripped
+      in if T.length candidate == 32 && T.all isHexDigit candidate
+         then candidate
+         else input
