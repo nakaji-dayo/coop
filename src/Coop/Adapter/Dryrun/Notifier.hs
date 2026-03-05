@@ -15,4 +15,8 @@ mkDryrunNotifierOps = NotifierOps
   , opsReplyThread = \channel ts msg -> do
       katipAddContext () $ logFM InfoS $ logStr $
         "[DRYRUN] Reply in " <> channel <> " (thread " <> ts <> "): " <> msg
+
+  , opsDeleteMessage = \channel ts -> do
+      katipAddContext () $ logFM InfoS $ logStr $
+        "[DRYRUN] Delete message in " <> channel <> " (ts " <> ts <> ")"
   }

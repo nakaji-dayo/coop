@@ -35,8 +35,9 @@ data LLMOps m = LLMOps
   }
 
 data NotifierOps m = NotifierOps
-  { opsNotify      :: Notification -> m ()
-  , opsReplyThread :: Text -> Text -> Text -> m ()
+  { opsNotify        :: Notification -> m ()
+  , opsReplyThread   :: Text -> Text -> Text -> m ()
+  , opsDeleteMessage :: Text -> Text -> m ()
   }
 
 data CalendarStoreOps m = CalendarStoreOps

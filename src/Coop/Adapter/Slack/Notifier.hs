@@ -22,6 +22,9 @@ mkLiveNotifierOps logEnv botToken manager = NotifierOps
 
   , opsReplyThread = \channel ts msg -> liftIO $ do
       slackPostMessage logEnv manager botToken channel msg (Just ts)
+
+  , opsDeleteMessage = \channel ts -> liftIO $ do
+      slackDeleteMessage logEnv manager botToken channel ts
   }
 
 slackPostMessage :: LogEnv -> Manager -> Text -> Text -> Text -> Maybe Text -> IO ()
@@ -40,6 +43,38 @@ slackPostMessage logEnv manager botToken channel text mThreadTs = do
         , requestBody = RequestBodyLBS (encode body)
         }
   logM logEnv "slack" DebugS $ logStr $ "postMessage to channel=" <> channel
+  resp <- httpLbs req manager
+  let status = statusCode (responseStatus resp)
+      respBody = responseBody resp
+  if status /= 200
+    then logM logEnv "slack" ErrorS $ logStr $
+           "HTTP error: " <> T.pack (show status) <> " " <> T.pack (show (LBS.toStrict respBody))
+    else do
+      let mError = parseMaybe (withObject "SlackResp" $ \v -> do
+            ok <- v .: "ok" :: Parser Bool
+            if ok then pure Nothing
+            else Just <$> v .: "error") =<< decode respBody
+      case mError of
+        Just (Just errMsg) ->
+          logM logEnv "slack" ErrorS $ logStr $ "API error: " <> (errMsg :: Text)
+        _ -> pure ()
+
+slackDeleteMessage :: LogEnv -> Manager -> Text -> Text -> Text -> IO ()
+slackDeleteMessage logEnv manager botToken channel ts = do
+  initReq <- parseRequest "https://slack.com/api/chat.delete"
+  let body = object
+        [ "channel" .= channel
+        , "ts" .= ts
+        ]
+      req = initReq
+        { method = "POST"
+        , requestHeaders =
+            [ ("Content-Type", "application/json")
+            , ("Authorization", "Bearer " <> TE.encodeUtf8 botToken)
+            ]
+        , requestBody = RequestBodyLBS (encode body)
+        }
+  logM logEnv "slack" DebugS $ logStr $ "deleteMessage channel=" <> channel <> " ts=" <> ts
   resp <- httpLbs req manager
   let status = statusCode (responseStatus resp)
       respBody = responseBody resp

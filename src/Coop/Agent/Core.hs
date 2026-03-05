@@ -64,17 +64,27 @@ processEvent event = do
   logDebug $ "processEvent text=" <> T.pack (show mText)
   logDebug $ "processEvent botUserId=" <> botUserId <> " monitoredUserId=" <> monitoredUserId
 
-  case (mType, mChannel, mTs, mUser, mText) of
-    (Just "message", Just channel, Just ts, Just user, Just text)
-      | mSubtype == Nothing
-      , user /= botUserId
+  case mType of
+    Just "reaction_added"
+      | lookupText "reaction" event == Just "wastebasket"
+      , lookupText "item_user" event == Just botUserId
+      , Just (Object item) <- KM.lookup "item" event
+      , Just itemChannel <- lookupText "channel" item
+      , Just itemTs <- lookupText "ts" item
       -> do
-          let mMention = parseMention monitoredUserId channel ts user Nothing text
-          logDebug $ "processEvent parseMention result=" <> T.pack (show (fmap pmMentionType mMention))
-          case mMention of
-            Just mention -> handleMention mention
-            Nothing -> logDebug "processEvent monitored user not mentioned, skipping"
-    _ -> logDebug "processEvent event did not match message pattern, skipping"
+          logInfo $ "Deleting bot message via wastebasket reaction: channel=" <> itemChannel <> " ts=" <> itemTs
+          deleteMessage itemChannel itemTs
+    _ -> case (mType, mChannel, mTs, mUser, mText) of
+      (Just "message", Just channel, Just ts, Just user, Just text)
+        | mSubtype == Nothing
+        , user /= botUserId
+        -> do
+            let mMention = parseMention monitoredUserId channel ts user Nothing text
+            logDebug $ "processEvent parseMention result=" <> T.pack (show (fmap pmMentionType mMention))
+            case mMention of
+              Just mention -> handleMention mention
+              Nothing -> logDebug "processEvent monitored user not mentioned, skipping"
+      _ -> logDebug "processEvent event did not match message pattern, skipping"
 
 lookupText :: Text -> Object -> Maybe Text
 lookupText key obj = case KM.lookup (fromString $ T.unpack key) obj of

@@ -58,6 +58,7 @@ instance LLM AppM where
 instance Notifier AppM where
   notify n = do ops <- asks envNotifier; Env.opsNotify ops n
   replyThread c ts msg = do ops <- asks envNotifier; Env.opsReplyThread ops c ts msg
+  deleteMessage c ts = do ops <- asks envNotifier; Env.opsDeleteMessage ops c ts
 
 instance CalendarStore AppM where
   getEvents day = do ops <- asks envCalendarStore; Env.opsGetEvents ops day
