@@ -8,3 +8,5 @@ dist-newstyle/
 #*#
 .env
 Product.md
+.DS_Store
+xcuserdata/
