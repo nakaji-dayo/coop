@@ -2,6 +2,7 @@ module Coop.Config
   ( Config (..)
   , RunMode (..)
   , ConnectionMode (..)
+  , EstimateUnit (..)
   , SlackConfig (..)
   , ClaudeConfig (..)
   , OpenAIConfig (..)
@@ -82,10 +83,15 @@ data DryrunConfig = DryrunConfig
   } deriving stock (Eq, Show, Generic)
     deriving anyclass (FromDhall)
 
+data EstimateUnit = Minutes | Hours | Days | Points
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass (FromDhall)
+
 data SchedulerConfig = SchedulerConfig
   { schedulerBriefingCron :: Text  -- ^ cron expression (e.g. "0 9 * * *") or "-" to disable
   , schedulerWeeklyBriefingCron :: Text  -- ^ cron expression for weekly briefing or "-" to disable
   , schedulerWeeklyAvailableHours :: Natural  -- ^ weekly available work hours (e.g. 30)
+  , schedulerEstimateUnit :: EstimateUnit  -- ^ unit for estimates (Minutes, Hours, Days, Points)
   } deriving stock (Eq, Show, Generic)
     deriving anyclass (FromDhall)
 

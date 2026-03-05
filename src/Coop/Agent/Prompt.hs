@@ -18,6 +18,7 @@ module Coop.Agent.Prompt
   ) where
 
 import Coop.Agent.Context (AgentContext (..))
+import Coop.Config (EstimateUnit (..))
 import Coop.Domain.Calendar (CalendarEvent (..), ResponseStatus (..), Visibility (..))
 import Coop.Domain.LLM (CompletionRequest (..), Message (..), Role (..))
 import Coop.Domain.Mention (ParsedMention (..))
@@ -177,12 +178,12 @@ data DailyBriefing = DailyBriefing
   } deriving stock (Eq, Show, Generic)
 
 data BriefingTask = BriefingTask
-  { btTaskId        :: Text
-  , btTitle         :: Text
-  , btPriority      :: Text
-  , btReason        :: Text
-  , btIsMust        :: Bool
-  , btEstimateHours :: Maybe Double
+  { btTaskId    :: Text
+  , btTitle     :: Text
+  , btPriority  :: Text
+  , btReason    :: Text
+  , btIsMust    :: Bool
+  , btEstimate  :: Maybe Double
   } deriving stock (Eq, Show, Generic)
 
 data EstimateRequest = EstimateRequest
@@ -208,7 +209,7 @@ instance FromJSON BriefingTask where
       <*> v .: "priority"
       <*> v .: "reason"
       <*> v .: "is_must"
-      <*> v .:? "estimate_hours"
+      <*> v .:? "estimate"
 
 instance FromJSON EstimateRequest where
   parseJSON = withObject "EstimateRequest" $ \v ->
@@ -222,8 +223,8 @@ parseDailyBriefing txt =
   let cleaned = extractJson txt
   in eitherDecodeStrict (TE.encodeUtf8 cleaned)
 
-buildDailyBriefingPrompt :: AgentContext -> Day -> TimeZone -> CompletionRequest
-buildDailyBriefingPrompt ctx today tz = CompletionRequest
+buildDailyBriefingPrompt :: AgentContext -> Day -> TimeZone -> EstimateUnit -> CompletionRequest
+buildDailyBriefingPrompt ctx today tz unit = CompletionRequest
   { crSystem = Just systemPrompt
   , crMessages = [ Message User userContent ]
   }
@@ -241,6 +242,9 @@ buildDailyBriefingPrompt ctx today tz = CompletionRequest
     bodies = acTaskBodies ctx
     events = filter (not . isDeclined) (acCalendarEvents ctx)
 
+    estimateDesc = estimateFieldDescription unit
+    capacityRule = dailyCapacityRule unit
+
     userContent = T.unlines
       [ "Generate a daily briefing for today."
       , ""
@@ -257,7 +261,7 @@ buildDailyBriefingPrompt ctx today tz = CompletionRequest
       , "Create a daily schedule. Respond with a JSON object:"
       , "{"
       , "  \"schedule\": ["
-      , "    { \"task_id\": \"...\", \"title\": \"...\", \"priority\": \"High\", \"reason\": \"Why today\", \"is_must\": true, \"estimate_hours\": 2.0 }"
+      , "    { \"task_id\": \"...\", \"title\": \"...\", \"priority\": \"High\", \"reason\": \"Why today\", \"is_must\": true, \"estimate\": " <> estimateExample unit <> " }"
       , "  ],"
       , "  \"estimate_requests\": ["
       , "    { \"task_id\": \"...\", \"title\": \"...\", \"reason\": \"Why estimate needed\" }"
@@ -273,9 +277,9 @@ buildDailyBriefingPrompt ctx today tz = CompletionRequest
       , "- Include only tasks that should be worked on TODAY"
       , "- is_must=true for tasks that absolutely must be done today (due today, critical priority, blockers)"
       , "- is_must=false for tasks that ideally should be worked on but can slip"
-      , "- estimate_hours: estimated hours to complete the task. If the task already has an Estimate value, convert it to hours. Otherwise, estimate based on the task title, body content, and linked documents"
+      , "- estimate: " <> estimateDesc
       , "- meeting_hours: from Today's Calendar above, determine which events are actual meetings (e.g. standup, 1on1, review) and sum their durations. Do NOT count non-meeting events such as focus/work blocks, personal events, reminders, lunch breaks, or time-off. Set to 0 if no meetings"
-      , "- Today's base work capacity is 8h. Available work time = 8h - meeting_hours. The total scheduled task hours must fit within the available time. Be realistic"
+      , capacityRule
       , "- Do NOT schedule tasks during meeting times — schedule work around meetings"
       , "- Declined events are already excluded from the calendar above"
       , "- meeting_preps: suggest preparation for meetings that seem to need it (e.g. 1on1s, design reviews, presentations). Include the meeting title and what to prepare"
@@ -358,7 +362,7 @@ data WeeklyTask = WeeklyTask
   { wtTaskId        :: Text
   , wtTitle         :: Text
   , wtPriority      :: Text
-  , wtEstimateHours :: Maybe Double
+  , wtEstimate      :: Maybe Double
   , wtMilestoneLink :: Text
   , wtReason        :: Text
   } deriving stock (Eq, Show, Generic)
@@ -384,7 +388,7 @@ instance FromJSON WeeklyTask where
       <$> v .: "task_id"
       <*> v .: "title"
       <*> v .: "priority"
-      <*> v .:? "estimate_hours"
+      <*> v .:? "estimate"
       <*> v .: "milestone_link"
       <*> v .: "reason"
 
@@ -393,8 +397,8 @@ parseWeeklyBriefing txt =
   let cleaned = extractJson txt
   in eitherDecodeStrict (TE.encodeUtf8 cleaned)
 
-buildWeeklyBriefingPrompt :: AgentContext -> Day -> Natural -> CompletionRequest
-buildWeeklyBriefingPrompt ctx today availableHours = CompletionRequest
+buildWeeklyBriefingPrompt :: AgentContext -> Day -> Natural -> EstimateUnit -> CompletionRequest
+buildWeeklyBriefingPrompt ctx today availableHours unit = CompletionRequest
   { crSystem = Just systemPrompt
   , crMessages = [ Message User userContent ]
   }
@@ -424,12 +428,17 @@ buildWeeklyBriefingPrompt ctx today availableHours = CompletionRequest
     weekStart = addDays mondayOffset today
     weekEnd = addDays 6 weekStart
 
+    weeklyCapacity = weeklyCapacityValue unit availableHours
+    capacityLine = case unit of
+      Points -> ""
+      _      -> "Available work capacity this week: " <> weeklyCapacity
+
     userContent = T.unlines
       [ "Generate a weekly briefing."
       , ""
       , "Today: " <> T.pack (show today)
       , "This week: " <> T.pack (show weekStart) <> " - " <> T.pack (show weekEnd)
-      , "Available work hours this week: " <> T.pack (show availableHours) <> "h"
+      , capacityLine
       , ""
       , "## Current Tasks"
       , if null activeTasks then "No active tasks."
@@ -441,7 +450,7 @@ buildWeeklyBriefingPrompt ctx today availableHours = CompletionRequest
       , "    { \"goal\": \"...\", \"timeframe\": \"1 month\", \"key_tasks\": [\"task title 1\", \"task title 2\"] }"
       , "  ],"
       , "  \"weekly_tasks\": ["
-      , "    { \"task_id\": \"...\", \"title\": \"...\", \"priority\": \"High\", \"estimate_hours\": 4.0, \"milestone_link\": \"Which milestone this supports\", \"reason\": \"Why this week\" }"
+      , "    { \"task_id\": \"...\", \"title\": \"...\", \"priority\": \"High\", \"estimate\": " <> estimateExample unit <> ", \"milestone_link\": \"Which milestone this supports\", \"reason\": \"Why this week\" }"
       , "  ],"
       , "  \"guideline_feedback\": \"Constructive suggestion on working guidelines\","
       , "  \"summary\": \"Brief overview of the week's focus\""
@@ -449,9 +458,42 @@ buildWeeklyBriefingPrompt ctx today availableHours = CompletionRequest
       , ""
       , "Rules:"
       , "- long_term_milestones: derive from behavioral guidelines and existing tasks. These are big-picture goals (1-3 months horizon). Each should reference existing tasks that contribute to it"
-      , "- weekly_tasks: concrete tasks to work on THIS week. Select and prioritize from existing tasks. Total estimate_hours must fit within available work hours (" <> T.pack (show availableHours) <> "h)"
-      , "- estimate_hours: estimated hours to complete. If the task already has an Estimate value, convert it to hours. Otherwise, estimate based on the task content"
+      , "- weekly_tasks: concrete tasks to work on THIS week. Select and prioritize from existing tasks." <> weeklyCapacityConstraint unit weeklyCapacity
+      , "- estimate: " <> estimateFieldDescription unit
       , "- milestone_link: explain how this task connects to a long-term milestone"
       , "- guideline_feedback: review the behavioral guidelines and suggest one constructive improvement or confirmation that the current direction is good"
       , "- IMPORTANT: Write all JSON field values (summary, reason, goal, guideline_feedback) following the tone and style specified in the system instructions above."
       ]
+
+-- | Example value for the estimate field in JSON template
+estimateExample :: EstimateUnit -> Text
+estimateExample Minutes = "120"
+estimateExample Hours   = "2.0"
+estimateExample Days    = "1.5"
+estimateExample Points  = "3"
+
+-- | Description of the estimate field for LLM prompt rules
+estimateFieldDescription :: EstimateUnit -> Text
+estimateFieldDescription Minutes = "estimated minutes to complete the task (e.g. 120). If the task already has an Estimate value, convert it to minutes. Otherwise, estimate based on the task title, body content, and linked documents"
+estimateFieldDescription Hours   = "estimated hours to complete the task (e.g. 2.0). If the task already has an Estimate value, convert it to hours. Otherwise, estimate based on the task title, body content, and linked documents"
+estimateFieldDescription Days    = "estimated days to complete the task (e.g. 1.5). If the task already has an Estimate value, convert it to days. Otherwise, estimate based on the task title, body content, and linked documents"
+estimateFieldDescription Points  = "estimated story points (e.g. 3). If the task already has an Estimate value, use it. Otherwise, estimate based on the task title, body content, and linked documents"
+
+-- | Daily capacity rule depending on unit
+dailyCapacityRule :: EstimateUnit -> Text
+dailyCapacityRule Minutes = "- Today's base work capacity is 480min. Available work time = 480min - meeting minutes. The total scheduled task estimate must fit within the available time. Be realistic"
+dailyCapacityRule Hours   = "- Today's base work capacity is 8h. Available work time = 8h - meeting_hours. The total scheduled task estimate must fit within the available time. Be realistic"
+dailyCapacityRule Days    = "- Today's base work capacity is 1d. Available work time = 1d - meeting time in days. The total scheduled task estimate must fit within the available time. Be realistic"
+dailyCapacityRule Points  = "- Estimate in story points. There is no strict capacity constraint for points"
+
+-- | Convert weekly available hours to the appropriate unit value string
+weeklyCapacityValue :: EstimateUnit -> Natural -> Text
+weeklyCapacityValue Minutes h = T.pack (show (h * 60)) <> "min"
+weeklyCapacityValue Hours   h = T.pack (show h) <> "h"
+weeklyCapacityValue Days    h = T.pack (show (fromIntegral h / 8.0 :: Double)) <> "d"
+weeklyCapacityValue Points  _ = ""
+
+-- | Capacity constraint text for weekly tasks rule
+weeklyCapacityConstraint :: EstimateUnit -> Text -> Text
+weeklyCapacityConstraint Points _ = ""
+weeklyCapacityConstraint _ cap    = " Total estimate must fit within available work capacity (" <> cap <> ")"

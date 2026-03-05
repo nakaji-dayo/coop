@@ -45,6 +45,7 @@
   { schedulerBriefingCron = "0 9 * * *"
   , schedulerWeeklyBriefingCron = "-"
   , schedulerWeeklyAvailableHours = 30
+  , schedulerEstimateUnit = < Minutes | Hours | Days | Points >.Hours
   }
 , cfgGoogleCalendar =
   { googleClientId = ""

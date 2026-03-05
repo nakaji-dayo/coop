@@ -190,7 +190,7 @@ testConfig catchupChannels = Config
       , notionPropEstimate = ""
       }
   , cfgDryrun = DryrunConfig { dryrunDataDir = "config/dryrun-data" }
-  , cfgScheduler = SchedulerConfig { schedulerBriefingCron = "-", schedulerWeeklyBriefingCron = "-", schedulerWeeklyAvailableHours = 30 }
+  , cfgScheduler = SchedulerConfig { schedulerBriefingCron = "-", schedulerWeeklyBriefingCron = "-", schedulerWeeklyAvailableHours = 30, schedulerEstimateUnit = Hours }
   , cfgGoogleCalendar = GoogleCalendarConfig
       { googleClientId = ""
       , googleClientSecret = ""

@@ -10,7 +10,7 @@ import Coop.Agent.Context (buildContext, buildBriefingContext, buildWeeklyBriefi
 import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, buildWeeklyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, parseWeeklyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..), MeetingPrep (..), WeeklyBriefing (..), LongTermMilestone (..), WeeklyTask (..))
 import Coop.App.Env (Env (..))
 import Coop.App.Log (logInfo, logError, logWarn, logDebug)
-import Coop.Config (Config (..), SlackConfig (..), SchedulerConfig (..))
+import Coop.Config (Config (..), SlackConfig (..), SchedulerConfig (..), EstimateUnit (..))
 import Coop.Domain.LLM (CompletionResponse (..))
 import Coop.Domain.Mention (ParsedMention (..), MentionType (..), parseMention)
 import Coop.Domain.Notification (Notification (..), NotificationLevel (..))
@@ -213,6 +213,7 @@ dailyBriefing
 dailyBriefing = do
   config <- asks envConfig
   let notifyChannel = slackNotifyChannel (cfgSlack config)
+      unit = schedulerEstimateUnit (cfgScheduler config)
 
   logInfo "Starting daily briefing"
 
@@ -222,7 +223,7 @@ dailyBriefing = do
 
   ctx <- buildBriefingContext today
 
-  let prompt = buildDailyBriefingPrompt ctx today tz
+  let prompt = buildDailyBriefingPrompt ctx today tz unit
 
   resp <- complete prompt
   logInfo $ "Daily briefing LLM response: " <> T.take 200 (crResponseText resp)
@@ -236,7 +237,7 @@ dailyBriefing = do
             , ""
             , "_(" <> T.pack err <> ")_"
             ]
-        Right briefing -> formatDailyBriefing briefing
+        Right briefing -> formatDailyBriefing unit briefing
 
   notify Notification
     { notifChannel = notifyChannel
@@ -246,8 +247,8 @@ dailyBriefing = do
 
   logInfo "Daily briefing completed"
 
-formatDailyBriefing :: DailyBriefing -> Text
-formatDailyBriefing briefing = T.unlines $ concat
+formatDailyBriefing :: EstimateUnit -> DailyBriefing -> Text
+formatDailyBriefing unit briefing = T.unlines $ concat
   [ [ ":sunrise: *Daily Briefing*"
     , ""
     , dbSummary briefing
@@ -256,8 +257,8 @@ formatDailyBriefing briefing = T.unlines $ concat
     ]
   , if null (dbSchedule briefing)
     then ["No tasks scheduled for today."]
-    else map formatBriefingTask (dbSchedule briefing)
-         <> [totalHoursLine (dbMeetingHours briefing) (dbSchedule briefing)]
+    else map (formatBriefingTask unit) (dbSchedule briefing)
+         <> [totalEstimateLine unit (dbMeetingHours briefing) (dbSchedule briefing)]
   , if null (dbMeetingPreps briefing) then []
     else
       [ ""
@@ -270,28 +271,46 @@ formatDailyBriefing briefing = T.unlines $ concat
       ] <> map formatEstimateRequest (dbEstimateRequests briefing)
   ]
 
-formatBriefingTask :: BriefingTask -> Text
-formatBriefingTask bt = T.concat
+formatBriefingTask :: EstimateUnit -> BriefingTask -> Text
+formatBriefingTask unit bt = T.concat
   [ if btIsMust bt then ":red_circle: " else ":white_circle: "
   , "[" <> btPriority bt <> "] "
   , "<" <> notionPageUrl (TaskId (btTaskId bt)) <> "|" <> btTitle bt <> ">"
-  , case btEstimateHours bt of
-      Just h  -> " (" <> formatHours h <> ")"
+  , case btEstimate bt of
+      Just v  -> " (" <> formatEstimate unit v <> ")"
       Nothing -> ""
   , " — " <> btReason bt
   ]
 
-totalHoursLine :: Double -> [BriefingTask] -> Text
-totalHoursLine mtgHours tasks =
-  let total = sum $ map (fromMaybe 0 . btEstimateHours) tasks
-      available = max 0 (8.0 - mtgHours)
-  in "\n:clock3: *Total: " <> formatHours total <> " / " <> formatHours available <> " available* (8h - " <> formatHours mtgHours <> " meetings)"
+totalEstimateLine :: EstimateUnit -> Double -> [BriefingTask] -> Text
+totalEstimateLine unit mtgHours tasks =
+  let total = sum $ map (fromMaybe 0 . btEstimate) tasks
+  in case unit of
+    Points -> "\n:clock3: *Total: " <> formatEstimate unit total <> "*"
+    Minutes ->
+      let available = max 0 (480.0 - mtgHours * 60)
+      in "\n:clock3: *Total: " <> formatEstimate unit total <> " / " <> formatEstimate unit available <> " available* (480min - " <> formatEstimate Minutes (mtgHours * 60) <> " meetings)"
+    Hours ->
+      let available = max 0 (8.0 - mtgHours)
+      in "\n:clock3: *Total: " <> formatEstimate unit total <> " / " <> formatEstimate unit available <> " available* (8h - " <> formatEstimate Hours mtgHours <> " meetings)"
+    Days ->
+      let available = max 0 (1.0 - mtgHours / 8.0)
+      in "\n:clock3: *Total: " <> formatEstimate unit total <> " / " <> formatEstimate unit available <> " available* (1d - " <> formatEstimate Days (mtgHours / 8.0) <> " meetings)"
 
-formatHours :: Double -> Text
-formatHours h
+formatEstimate :: EstimateUnit -> Double -> Text
+formatEstimate Minutes v
+  | v == fromIntegral (round v :: Int) = T.pack (show (round v :: Int)) <> "min"
+  | otherwise = T.pack (show v) <> "min"
+formatEstimate Hours h
   | h < 1     = T.pack (show (round (h * 60) :: Int)) <> "min"
   | h == fromIntegral (round h :: Int) = T.pack (show (round h :: Int)) <> "h"
   | otherwise = T.pack (show h) <> "h"
+formatEstimate Days d
+  | d == fromIntegral (round d :: Int) = T.pack (show (round d :: Int)) <> "d"
+  | otherwise = T.pack (show d) <> "d"
+formatEstimate Points p
+  | p == fromIntegral (round p :: Int) = T.pack (show (round p :: Int)) <> "pt"
+  | otherwise = T.pack (show p) <> "pt"
 
 formatMeetingPrep :: MeetingPrep -> Text
 formatMeetingPrep mp = T.concat
@@ -315,6 +334,7 @@ weeklyBriefing = do
   config <- asks envConfig
   let notifyChannel = slackNotifyChannel (cfgSlack config)
       availableHours = schedulerWeeklyAvailableHours (cfgScheduler config)
+      unit = schedulerEstimateUnit (cfgScheduler config)
 
   logInfo "Starting weekly briefing"
 
@@ -324,7 +344,7 @@ weeklyBriefing = do
 
   ctx <- buildWeeklyBriefingContext
 
-  let prompt = buildWeeklyBriefingPrompt ctx today availableHours
+  let prompt = buildWeeklyBriefingPrompt ctx today availableHours unit
 
   resp <- complete prompt
   logInfo $ "Weekly briefing LLM response: " <> T.take 200 (crResponseText resp)
@@ -338,7 +358,7 @@ weeklyBriefing = do
             , ""
             , "_(" <> T.pack err <> ")_"
             ]
-        Right briefing -> formatWeeklyBriefing briefing
+        Right briefing -> formatWeeklyBriefing unit briefing
 
   notify Notification
     { notifChannel = notifyChannel
@@ -348,8 +368,8 @@ weeklyBriefing = do
 
   logInfo "Weekly briefing completed"
 
-formatWeeklyBriefing :: WeeklyBriefing -> Text
-formatWeeklyBriefing briefing = T.unlines $ concat
+formatWeeklyBriefing :: EstimateUnit -> WeeklyBriefing -> Text
+formatWeeklyBriefing unit briefing = T.unlines $ concat
   [ [ ":calendar: *Weekly Briefing*"
     , ""
     , wbSummary briefing
@@ -364,8 +384,8 @@ formatWeeklyBriefing briefing = T.unlines $ concat
     ]
   , if null (wbWeeklyTasks briefing)
     then ["No tasks scheduled for this week."]
-    else map formatWeeklyTask (wbWeeklyTasks briefing)
-         <> [weeklyTotalLine (wbWeeklyTasks briefing)]
+    else map (formatWeeklyTask unit) (wbWeeklyTasks briefing)
+         <> [weeklyTotalLine unit (wbWeeklyTasks briefing)]
   , if T.null (wbGuidelineFeedback briefing) then []
     else
       [ ""
@@ -381,19 +401,19 @@ formatMilestone ms = T.concat
     else "\n    " <> T.intercalate ", " (ltKeyTasks ms)
   ]
 
-formatWeeklyTask :: WeeklyTask -> Text
-formatWeeklyTask wt = T.concat
+formatWeeklyTask :: EstimateUnit -> WeeklyTask -> Text
+formatWeeklyTask unit wt = T.concat
   [ ":pushpin: "
   , "[" <> wtPriority wt <> "] "
   , "<" <> notionPageUrl (TaskId (wtTaskId wt)) <> "|" <> wtTitle wt <> ">"
-  , case wtEstimateHours wt of
-      Just h  -> " (" <> formatHours h <> ")"
+  , case wtEstimate wt of
+      Just v  -> " (" <> formatEstimate unit v <> ")"
       Nothing -> ""
   , " — " <> wtReason wt
   , "\n    _" <> wtMilestoneLink wt <> "_"
   ]
 
-weeklyTotalLine :: [WeeklyTask] -> Text
-weeklyTotalLine tasks =
-  let total = sum $ map (fromMaybe 0 . wtEstimateHours) tasks
-  in "\n:clock3: *Total: " <> formatHours total <> "*"
+weeklyTotalLine :: EstimateUnit -> [WeeklyTask] -> Text
+weeklyTotalLine unit tasks =
+  let total = sum $ map (fromMaybe 0 . wtEstimate) tasks
+  in "\n:clock3: *Total: " <> formatEstimate unit total <> "*"
