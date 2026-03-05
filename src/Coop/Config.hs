@@ -70,7 +70,7 @@ data NotionConfig = NotionConfig
   , notionPropDueDate     :: Text
   , notionStatusOpen      :: Text
   , notionStatusInProgress :: Text
-  , notionStatusDone      :: Text
+  , notionStatusDone      :: [Text]
   , notionPropAssignee    :: Text
   , notionAssigneeUserId  :: Text
   , notionPropEstimate    :: Text

@@ -109,7 +109,6 @@ executable coop
       , http-client-tls
       , warp
       , unliftio
-      , dotenv >=0.11
     hs-source-dirs:   app
     default-language: GHC2021
     ghc-options:      -threaded -rtsopts -with-rtsopts=-N

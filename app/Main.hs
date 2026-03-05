@@ -30,12 +30,10 @@ import Katip (LogEnv)
 import Network.HTTP.Client (Manager)
 import Network.HTTP.Client.TLS (newTlsManager)
 import qualified Network.Wai.Handler.Warp as Warp
-import Configuration.Dotenv (loadFile, defaultConfig, onMissingFile)
 import System.Environment (getArgs)
 
 main :: IO ()
 main = do
-  loadFile defaultConfig `onMissingFile` pure ()
   args <- getArgs
   case parseArgs args of
     AuthGoogle configPath -> do
@@ -66,7 +64,7 @@ data Command = AuthGoogle FilePath | RunServer FilePath
 
 parseArgs :: [String] -> Command
 parseArgs ("auth":"google":"--config":p:_) = AuthGoogle p
-parseArgs ("auth":"google":_)              = AuthGoogle "config/coop.dhall"
+parseArgs ("auth":"google":_)              = AuthGoogle "config/coop-local.dhall"
 parseArgs ("--config":p:_)                 = RunServer p
 parseArgs [p]                              = RunServer p
 parseArgs _                                = RunServer "config/coop-dryrun.dhall"

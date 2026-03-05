@@ -118,8 +118,8 @@ priorityToText Low      = "Low"
 statusToText :: NotionConfig -> TaskStatus -> Text
 statusToText cfg Open       = notionStatusOpen cfg
 statusToText cfg InProgress = notionStatusInProgress cfg
-statusToText cfg Done       = notionStatusDone cfg
-statusToText cfg Archived   = notionStatusDone cfg
+statusToText cfg Done       = head (notionStatusDone cfg)
+statusToText cfg Archived   = head (notionStatusDone cfg)
 
 pageToTask :: NotionConfig -> NotionPage -> Task
 pageToTask cfg page =
@@ -218,7 +218,7 @@ textToPriority t = case T.toLower t of
 
 textToStatus :: NotionConfig -> Text -> TaskStatus
 textToStatus cfg t
-  | t == notionStatusDone cfg       = Done
+  | t `elem` notionStatusDone cfg   = Done
   | t == notionStatusInProgress cfg = InProgress
   | t == notionStatusOpen cfg       = Open
   | otherwise                       = Open

@@ -33,7 +33,7 @@
   , notionPropDueDate = ""
   , notionStatusOpen = "Open"
   , notionStatusInProgress = "In Progress"
-  , notionStatusDone = "Done"
+  , notionStatusDone = [ "Done" ]
   , notionPropAssignee = ""
   , notionAssigneeUserId = ""
   , notionPropEstimate = ""
