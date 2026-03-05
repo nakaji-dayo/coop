@@ -60,9 +60,9 @@ final class CoopManager {
 
     var menuBarIconName: String {
         switch status {
-        case .stopped: "bird"
-        case .running: "bird.fill"
-        case .error: "exclamationmark.triangle"
+        case .stopped: "MenuBarIconOutline"
+        case .running: "MenuBarIconFill"
+        case .error: "MenuBarIconError"
         }
     }
 

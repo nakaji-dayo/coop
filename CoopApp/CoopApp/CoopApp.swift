@@ -37,7 +37,7 @@ struct CoopApp: App {
             }
             .keyboardShortcut("q")
         } label: {
-            Image(systemName: manager.menuBarIconName)
+            Image(manager.menuBarIconName)
         }
         .menuBarExtraStyle(.menu)
     }
