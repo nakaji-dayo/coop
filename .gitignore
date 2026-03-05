@@ -10,3 +10,4 @@ dist-newstyle/
 Product.md
 .DS_Store
 xcuserdata/
+*.dmg

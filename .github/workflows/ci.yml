@@ -90,6 +90,44 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.ARTIFACT_NAME }}
 
+      - name: Build CoopApp DMG
+        if: runner.os == 'macOS'
+        run: |
+          cd CoopApp
+          xcodebuild -project CoopApp.xcodeproj \
+            -scheme CoopApp \
+            -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -arch arm64 \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_ALLOWED=YES \
+            ONLY_ACTIVE_ARCH=NO \
+            clean build
+
+          APP_PATH="$RUNNER_TEMP/derived/Build/Products/Release/CoopApp.app"
+          COOP_BIN="$(cd "$GITHUB_WORKSPACE" && cabal list-bin coop)"
+          cp "$COOP_BIN" "$APP_PATH/Contents/MacOS/coop"
+          codesign --force --sign - "$APP_PATH/Contents/MacOS/coop"
+          codesign --force --deep --sign - "$APP_PATH"
+          codesign --verify --deep --strict "$APP_PATH"
+
+          STAGING="$RUNNER_TEMP/dmg-staging"
+          mkdir -p "$STAGING"
+          cp -R "$APP_PATH" "$STAGING/"
+          ln -s /Applications "$STAGING/Applications"
+          hdiutil create \
+            -volname "CoopApp" \
+            -srcfolder "$STAGING" \
+            -ov \
+            -format UDZO \
+            "$GITHUB_WORKSPACE/CoopApp-macos-arm64.dmg"
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: CoopApp-macos-arm64
+          path: CoopApp-macos-arm64.dmg
+
   release:
     if: github.event_name == 'push'
     needs: build
@@ -113,7 +151,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          gh release create "${TAG}" artifacts/coop-* \
+          gh release create "${TAG}" artifacts/coop-* artifacts/CoopApp-*.dmg \
             --title "${TAG}" \
             --generate-notes
 
@@ -124,7 +162,7 @@ jobs:
         run: |
           gh release delete latest --yes || true
           git push --delete origin latest || true
-          gh release create latest artifacts/coop-* \
+          gh release create latest artifacts/coop-* artifacts/CoopApp-*.dmg \
             --title "Latest (main)" \
             --notes "Built from main branch ($(date -u '+%Y-%m-%d %H:%M UTC'))" \
             --prerelease

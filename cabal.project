@@ -2,6 +2,9 @@ packages: .
 
 constraints: req >= 3.13.4
 
+package ghc-bignum
+  flags: +native
+
 source-repository-package
   type: git
   location: https://github.com/velveteer/slacker.git
