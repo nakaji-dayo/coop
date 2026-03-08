@@ -188,9 +188,10 @@ testConfig catchupChannels = Config
       , notionPropAssignee = ""
       , notionAssigneeUserId = ""
       , notionPropEstimate = ""
+      , notionEstimateUnit = Hours
       }
   , cfgDryrun = DryrunConfig { dryrunDataDir = "config/dryrun-data" }
-  , cfgScheduler = SchedulerConfig { schedulerBriefingCron = "-", schedulerWeeklyBriefingCron = "-", schedulerWeeklyAvailableHours = 30, schedulerEstimateUnit = Hours }
+  , cfgScheduler = SchedulerConfig { schedulerBriefingCron = "-", schedulerWeeklyBriefingCron = "-", schedulerWeeklyAvailableHours = 30 }
   , cfgGoogleCalendar = GoogleCalendarConfig
       { googleClientId = ""
       , googleClientSecret = ""

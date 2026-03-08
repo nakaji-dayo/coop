@@ -10,7 +10,7 @@ import Coop.Agent.Context (buildContext, buildBriefingContext, buildWeeklyBriefi
 import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, buildWeeklyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, parseWeeklyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..), MeetingPrep (..), WeeklyBriefing (..), LongTermMilestone (..), WeeklyTask (..))
 import Coop.App.Env (Env (..))
 import Coop.App.Log (logInfo, logError, logWarn, logDebug)
-import Coop.Config (Config (..), SlackConfig (..), SchedulerConfig (..), EstimateUnit (..))
+import Coop.Config (Config (..), SlackConfig (..), NotionConfig (..), SchedulerConfig (..), EstimateUnit (..))
 import Coop.Domain.LLM (CompletionResponse (..))
 import Coop.Domain.Mention (ParsedMention (..), MentionType (..), parseMention)
 import Coop.Domain.Notification (Notification (..), NotificationLevel (..))
@@ -223,7 +223,7 @@ dailyBriefing
 dailyBriefing = do
   config <- asks envConfig
   let notifyChannel = slackNotifyChannel (cfgSlack config)
-      unit = schedulerEstimateUnit (cfgScheduler config)
+      unit = notionEstimateUnit (cfgNotion config)
 
   logInfo "Starting daily briefing"
 
@@ -344,7 +344,7 @@ weeklyBriefing = do
   config <- asks envConfig
   let notifyChannel = slackNotifyChannel (cfgSlack config)
       availableHours = schedulerWeeklyAvailableHours (cfgScheduler config)
-      unit = schedulerEstimateUnit (cfgScheduler config)
+      unit = notionEstimateUnit (cfgNotion config)
 
   logInfo "Starting weekly briefing"
 

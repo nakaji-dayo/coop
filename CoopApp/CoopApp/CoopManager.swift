@@ -386,6 +386,7 @@ final class CoopManager {
           , notionPropAssignee = ""
           , notionAssigneeUserId = ""
           , notionPropEstimate = ""
+          , notionEstimateUnit = < Minutes | Hours | Days | Points >.Hours
           }
         , cfgDryrun =
           { dryrunDataDir = "config/dryrun-data"
@@ -394,7 +395,6 @@ final class CoopManager {
           { schedulerBriefingCron = "0 9 * * *"
           , schedulerWeeklyBriefingCron = "-"
           , schedulerWeeklyAvailableHours = 30
-          , schedulerEstimateUnit = < Minutes | Hours | Days | Points >.Hours
           }
         , cfgGoogleCalendar =
           { googleClientId = ""
