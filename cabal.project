@@ -5,6 +5,9 @@ constraints: req >= 3.13.4
 package ghc-bignum
   flags: +native
 
+package wai-app-static
+  flags: +crypton
+
 source-repository-package
   type: git
   location: https://github.com/velveteer/slacker.git
