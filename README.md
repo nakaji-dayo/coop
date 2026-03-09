@@ -29,33 +29,34 @@ Slackでメンションされると行動指針を踏まえた優先度判定付
             │                   │        └─────────────────┘
             └─────────┬─────────┘
                       │
-      ┌───────────────┼───────────────┐
-      │               │               │
-      ▼               ▼               ▼
-   ┌────────────┐ ┌────────────┐ ┌──────────────┐
-   │Daily Brief │ │Weekly Brief│ │ Smart Tasks  │
-   │            │ │            │ │              │
-   │"Here's your│ │ Milestone  │ │ Auto-created │
-   │ day, boss."│ │ check-in & │ │ with priority│
-   │            │ │ guideline  │ │ & estimates  │
-   │ Priorities,│ │ feedback   │ │              │
-   │ estimates, │ │            │ │ From every   │
-   │ & schedule │ │"Are you    │ │ mention you  │
-   │ around MTGs│ │ heading    │ │ receive      │
-   │            │ │ the right  │ │              │
-   │            │ │ direction?"│ │              │
-   └─────┬──────┘ └─────┬──────┘ └──────┬───────┘
-         │              │               │
-         └──────────────┴───────────────┘
-                        │
-                        ▼
-             ┌─────────────────────┐
-             │  Slack notification │
-             │  channel or DM      │
-             │                     │
-             │  Everything in one  │
-             │  place. You act.    │
-             └─────────────────────┘
+      ┌───────────────┼───────────────┬───────────────┐
+      │               │               │               │
+      ▼               ▼               ▼               ▼
+   ┌────────────┐ ┌────────────┐ ┌──────────────┐ ┌──────────────┐
+   │Daily Brief │ │Weekly Brief│ │ Smart Tasks  │ │AI Delegation │
+   │            │ │            │ │              │ │              │
+   │"Here's your│ │ Milestone  │ │ Auto-created │ │ Subtasks     │
+   │ day, boss."│ │ check-in & │ │ with priority│ │ written to   │
+   │            │ │ guideline  │ │ & estimates  │ │ GitHub Issues│
+   │ Priorities,│ │ feedback   │ │              │ │ etc.         │
+   │ estimates, │ │            │ │ From every   │ │              │
+   │ & schedule │ │"Are you    │ │ mention you  │ │              │
+   │ around MTGs│ │ heading    │ │ receive      │ │              │
+   │            │ │ the right  │ │              │ │              │
+   │            │ │ direction?"│ │              │ │              │
+   └─────┬──────┘ └─────┬──────┘ └──────┬───────┘ └──────┬───────┘
+         │              │               │                │
+         └──────────┬───┴───────────────┘                │
+                    │                                    │
+                    ▼                                    ▼
+         ┌─────────────────────┐            ┌─────────────────────┐
+         │  Slack notification │            │  External AI Agents │
+         │  channel or DM      │            │  (outside coop)     │
+         │                     │            │                     │
+         │  Everything in one  │            │  e.g. Claude Code   │
+         │  place. You act.    │            │  Action picks up    │
+         │                     │            │  issues & sends PRs │
+         └─────────────────────┘            └─────────────────────┘
 ```
 
 ## 必要な環境
