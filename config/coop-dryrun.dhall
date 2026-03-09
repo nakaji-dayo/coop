@@ -53,4 +53,11 @@
   , googleCalendarId = ""
   , googleTokenPath = ""
   }
+, cfgAiDelegation =
+  { aiTaskBackend = ""
+  , aiGitHubRepo = ""
+  , aiGitHubLabel = "ai-task"
+  , aiGitHubToken = ""
+  , aiNotionDatabaseId = ""
+  }
 }

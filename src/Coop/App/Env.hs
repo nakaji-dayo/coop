@@ -55,4 +55,5 @@ data Env m = Env
   , envLLM            :: LLMOps m
   , envNotifier       :: NotifierOps m
   , envCalendarStore  :: CalendarStoreOps m
+  , envAiTaskStore    :: Maybe (TaskStoreOps IO)
   }

@@ -151,6 +151,7 @@ mkTestEnv catchupChannels = do
       , envLLM = mkDryrunLLMOps
       , envNotifier = mkDryrunNotifierOps
       , envCalendarStore = mkDryrunCalendarStoreOps
+      , envAiTaskStore = Nothing
       }
 
 testConfig :: Text -> Config
@@ -197,5 +198,12 @@ testConfig catchupChannels = Config
       , googleClientSecret = ""
       , googleCalendarId = ""
       , googleTokenPath = ""
+      }
+  , cfgAiDelegation = AiDelegationConfig
+      { aiTaskBackend = ""
+      , aiGitHubRepo = ""
+      , aiGitHubLabel = "ai-task"
+      , aiGitHubToken = ""
+      , aiNotionDatabaseId = ""
       }
   }

@@ -1,6 +1,6 @@
 module Main where
 
-import Coop.Config (loadConfig, Config (..), RunMode (..), ConnectionMode (..), DryrunConfig (..), SlackConfig (..), NotionConfig (..), LLMConfig (..), GoogleCalendarConfig (..))
+import Coop.Config (loadConfig, Config (..), RunMode (..), ConnectionMode (..), DryrunConfig (..), SlackConfig (..), NotionConfig (..), LLMConfig (..), GoogleCalendarConfig (..), AiDelegationConfig (..), normalizeNotionId)
 import Coop.Agent.CatchUp (runCatchUp)
 import Coop.App.Env (Env (..))
 import Coop.App.Log (withLogEnv, parseLogLevel)
@@ -21,6 +21,7 @@ import Coop.Adapter.Notion.TaskStore (mkLiveTaskStoreOps)
 import Coop.Adapter.Slack.Notifier (mkLiveNotifierOps)
 import Coop.Adapter.GoogleCalendar.Auth (runGoogleAuth)
 import Coop.Adapter.GoogleCalendar.CalendarStore (mkLiveCalendarStoreOps, mkNoopCalendarStoreOps)
+import Coop.Adapter.GitHub.TaskStore (mkGitHubTaskStoreOps)
 import Control.Concurrent.STM (newTVarIO)
 import qualified Data.Map.Strict as Map
 import Data.Text (pack)
@@ -74,6 +75,11 @@ mkEnv config logEnv manager = do
   case cfgMode config of
     Dryrun -> do
       taskStoreVar <- newTVarIO Map.empty
+      let aiCfg = cfgAiDelegation config
+      mAiStore <- case aiTaskBackend aiCfg of
+        "GitHub" -> Just . mkDryrunTaskStoreOps <$> newTVarIO Map.empty
+        "Notion" -> Just . mkDryrunTaskStoreOps <$> newTVarIO Map.empty
+        _        -> pure Nothing
       pure Env
         { envConfig        = config
         , envLogEnv        = logEnv
@@ -85,18 +91,24 @@ mkEnv config logEnv manager = do
         , envLLM           = mkDryrunLLMOps
         , envNotifier      = mkDryrunNotifierOps
         , envCalendarStore = mkDryrunCalendarStoreOps
+        , envAiTaskStore   = mAiStore
         }
     Live -> do
       let slackCfg  = cfgSlack config
           llmCfg    = cfgLLM config
           notionCfg = cfgNotion config
           gcalCfg   = cfgGoogleCalendar config
+          aiCfg     = cfgAiDelegation config
           llmOps    = case llmBackend llmCfg of
             "OpenAI" -> mkOpenAILLMOps (llmOpenAI llmCfg) manager
             _        -> mkLiveLLMOps (llmClaude llmCfg) manager
           calendarOps = if T.null (googleClientId gcalCfg)
             then mkNoopCalendarStoreOps
             else mkLiveCalendarStoreOps gcalCfg manager
+          aiStore = case aiTaskBackend aiCfg of
+            "GitHub" -> Just $ mkGitHubTaskStoreOps aiCfg manager
+            "Notion" -> Just $ mkLiveTaskStoreOps notionCfg { notionTaskDatabaseId = normalizeNotionId (aiNotionDatabaseId aiCfg) } manager
+            _        -> Nothing
       pure Env
         { envConfig        = config
         , envLogEnv        = logEnv
@@ -108,4 +120,5 @@ mkEnv config logEnv manager = do
         , envLLM           = llmOps
         , envNotifier      = mkLiveNotifierOps logEnv (slackBotToken slackCfg) manager
         , envCalendarStore = calendarOps
+        , envAiTaskStore   = aiStore
         }

@@ -52,6 +52,9 @@ library
         Coop.Adapter.Slack.History
         Coop.Adapter.Slack.Notifier
         Coop.Adapter.Slack.SocketMode
+        Coop.Adapter.GitHub.Types
+        Coop.Adapter.GitHub.Client
+        Coop.Adapter.GitHub.TaskStore
         Coop.Adapter.GoogleCalendar.Types
         Coop.Adapter.GoogleCalendar.Auth
         Coop.Adapter.GoogleCalendar.Client

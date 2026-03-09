@@ -11,6 +11,7 @@ module Coop.Config
   , DryrunConfig (..)
   , SchedulerConfig (..)
   , GoogleCalendarConfig (..)
+  , AiDelegationConfig (..)
   , loadConfig
   , normalizeNotionId
   ) where
@@ -103,6 +104,15 @@ data GoogleCalendarConfig = GoogleCalendarConfig
   } deriving stock (Eq, Show, Generic)
     deriving anyclass (FromDhall)
 
+data AiDelegationConfig = AiDelegationConfig
+  { aiTaskBackend      :: Text   -- ^ "GitHub" or "Notion"; empty string disables
+  , aiGitHubRepo       :: Text   -- ^ GitHub: "owner/repo" format
+  , aiGitHubLabel      :: Text   -- ^ GitHub: label to apply to created issues
+  , aiGitHubToken      :: Text   -- ^ GitHub: personal access token
+  , aiNotionDatabaseId :: Text   -- ^ Notion: database ID for AI delegation tasks
+  } deriving stock (Eq, Show, Generic)
+    deriving anyclass (FromDhall)
+
 data Config = Config
   { cfgMode           :: RunMode
   , cfgPort           :: Natural
@@ -113,6 +123,7 @@ data Config = Config
   , cfgDryrun         :: DryrunConfig
   , cfgScheduler      :: SchedulerConfig
   , cfgGoogleCalendar :: GoogleCalendarConfig
+  , cfgAiDelegation   :: AiDelegationConfig
   } deriving stock (Eq, Show, Generic)
     deriving anyclass (FromDhall)
 

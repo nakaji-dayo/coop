@@ -9,6 +9,7 @@ module Coop.Agent.Prompt
   , BriefingTask (..)
   , EstimateRequest (..)
   , MeetingPrep (..)
+  , AiDelegation (..)
   , WeeklyBriefing (..)
   , LongTermMilestone (..)
   , WeeklyTask (..)
@@ -169,12 +170,30 @@ instance FromJSON MeetingPrep where
       <$> v .: "title"
       <*> v .: "reason"
 
+data AiDelegation = AiDelegation
+  { adTaskId     :: Text
+  , adTitle      :: Text
+  , adBody       :: Text
+  , adTargetRepo :: Text
+  , adReason     :: Text
+  } deriving stock (Eq, Show, Generic)
+
+instance FromJSON AiDelegation where
+  parseJSON = withObject "AiDelegation" $ \v ->
+    AiDelegation
+      <$> v .: "task_id"
+      <*> v .: "title"
+      <*> v .: "body"
+      <*> v .: "target_repo"
+      <*> v .: "reason"
+
 data DailyBriefing = DailyBriefing
   { dbSchedule        :: [BriefingTask]
   , dbEstimateRequests :: [EstimateRequest]
   , dbMeetingPreps    :: [MeetingPrep]
   , dbMeetingHours    :: Double
   , dbSummary         :: Text
+  , dbAiDelegations   :: [AiDelegation]
   } deriving stock (Eq, Show, Generic)
 
 data BriefingTask = BriefingTask
@@ -200,6 +219,7 @@ instance FromJSON DailyBriefing where
       <*> (v .:? "meeting_preps" >>= pure . maybe [] id)
       <*> (v .:? "meeting_hours" >>= pure . maybe 0 id)
       <*> v .: "summary"
+      <*> (v .:? "ai_delegations" >>= pure . maybe [] id)
 
 instance FromJSON BriefingTask where
   parseJSON = withObject "BriefingTask" $ \v ->
@@ -223,8 +243,8 @@ parseDailyBriefing txt =
   let cleaned = extractJson txt
   in eitherDecodeStrict (TE.encodeUtf8 cleaned)
 
-buildDailyBriefingPrompt :: AgentContext -> Day -> TimeZone -> EstimateUnit -> CompletionRequest
-buildDailyBriefingPrompt ctx today tz unit = CompletionRequest
+buildDailyBriefingPrompt :: AgentContext -> Day -> TimeZone -> EstimateUnit -> Bool -> CompletionRequest
+buildDailyBriefingPrompt ctx today tz unit aiEnabled = CompletionRequest
   { crSystem = Just systemPrompt
   , crMessages = [ Message User userContent ]
   }
@@ -244,6 +264,23 @@ buildDailyBriefingPrompt ctx today tz unit = CompletionRequest
 
     estimateDesc = estimateFieldDescription unit
     capacityRule = dailyCapacityRule unit
+
+    aiDelegationSchema = if aiEnabled then T.unlines
+      [ "  \"ai_delegations\": ["
+      , "    { \"task_id\": \"...\", \"title\": \"Issue title\", \"body\": \"Background context from the task\", \"target_repo\": \"owner/repo\", \"reason\": \"Why AI can handle this\" }"
+      , "  ],"
+      ] else ""
+
+    aiDelegationRules = if aiEnabled then T.unlines
+      [ "- ai_delegations: analyze tasks and extract subtasks that can be delegated to AI agents. For each delegation:"
+      , "  - task_id: the source Notion task ID"
+      , "  - title: a clear, actionable issue title for the AI agent"
+      , "  - body: transcribe relevant background from the Notion task body. Include enough context for the AI to work independently"
+      , "  - target_repo: select from repositories listed in the instructions document. Must be a real repository"
+      , "  - reason: why this subtask is suitable for AI delegation"
+      , "  - Do NOT include specific implementation instructions — let the AI agent decide the approach"
+      , "  - Only delegate well-scoped, mechanical, or clearly-defined subtasks"
+      ] else ""
 
     userContent = T.unlines
       [ "Generate a daily briefing for today."
@@ -269,6 +306,7 @@ buildDailyBriefingPrompt ctx today tz unit = CompletionRequest
       , "  \"meeting_preps\": ["
       , "    { \"title\": \"Meeting name\", \"reason\": \"What to prepare\" }"
       , "  ],"
+      , aiDelegationSchema
       , "  \"meeting_hours\": 2.5,"
       , "  \"summary\": \"Brief overview of today's focus\""
       , "}"
@@ -284,6 +322,7 @@ buildDailyBriefingPrompt ctx today tz unit = CompletionRequest
       , "- Declined events are already excluded from the calendar above"
       , "- meeting_preps: suggest preparation for meetings that seem to need it (e.g. 1on1s, design reviews, presentations). Include the meeting title and what to prepare"
       , "- estimate_requests: list tasks NOT in today's schedule that seem large but have no estimate"
+      , aiDelegationRules
       , "- IMPORTANT: Write all JSON field values (summary, reason) following the tone and style specified in the system instructions above."
       ]
 

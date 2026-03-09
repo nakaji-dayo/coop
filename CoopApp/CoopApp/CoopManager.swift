@@ -402,6 +402,13 @@ final class CoopManager {
           , googleCalendarId = "primary"
           , googleTokenPath = "~/.config/coop/google-token.json"
           }
+        , cfgAiDelegation =
+          { aiTaskBackend = ""
+          , aiGitHubRepo = ""
+          , aiGitHubLabel = "ai-task"
+          , aiGitHubToken = ""
+          , aiNotionDatabaseId = ""
+          }
         }
         """
 }

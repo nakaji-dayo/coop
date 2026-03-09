@@ -7,8 +7,8 @@ module Coop.Agent.Core
   ) where
 
 import Coop.Agent.Context (buildContext, buildBriefingContext, buildWeeklyBriefingContext)
-import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, buildWeeklyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, parseWeeklyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..), MeetingPrep (..), WeeklyBriefing (..), LongTermMilestone (..), WeeklyTask (..))
-import Coop.App.Env (Env (..))
+import Coop.Agent.Prompt (buildMentionAnalysisPrompt, buildDailyBriefingPrompt, buildWeeklyBriefingPrompt, parseMentionAnalysis, parseDailyBriefing, parseWeeklyBriefing, MentionAnalysis (..), AnalysisResult (..), DailyBriefing (..), BriefingTask (..), EstimateRequest (..), MeetingPrep (..), AiDelegation (..), WeeklyBriefing (..), LongTermMilestone (..), WeeklyTask (..))
+import Coop.App.Env (Env (..), TaskStoreOps (..))
 import Coop.App.Log (logInfo, logError, logWarn, logDebug)
 import Coop.Config (Config (..), SlackConfig (..), NotionConfig (..), SchedulerConfig (..), EstimateUnit (..))
 import Coop.Domain.LLM (CompletionResponse (..))
@@ -29,7 +29,10 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.LocalTime (getCurrentTimeZone, utcToLocalTime, localDay)
+import Control.Exception (SomeException, try)
+import Control.Monad (forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Maybe (isJust)
 import Katip (KatipContext)
 
 -- | Process a Slack event Value. Called asynchronously after returning 200.
@@ -222,10 +225,25 @@ dailyBriefing
   => m ()
 dailyBriefing = do
   config <- asks envConfig
+  mAiStore <- asks envAiTaskStore
   let notifyChannel = slackNotifyChannel (cfgSlack config)
       unit = notionEstimateUnit (cfgNotion config)
+      aiEnabled = isJust mAiStore
 
   logInfo "Starting daily briefing"
+
+  -- Close previous AI delegation issues
+  case mAiStore of
+    Just aiStore -> do
+      logInfo "Closing previous AI delegation issues"
+      result <- liftIO $ try $ do
+        oldIssues <- opsListTasks aiStore
+        forM_ oldIssues $ \issue ->
+          opsArchiveTask aiStore (taskId issue)
+      case result of
+        Left (e :: SomeException) -> logError $ "Failed to close AI issues: " <> T.pack (show e)
+        Right () -> pure ()
+    Nothing -> pure ()
 
   now0 <- liftIO getCurrentTime
   tz <- liftIO getCurrentTimeZone
@@ -233,27 +251,65 @@ dailyBriefing = do
 
   ctx <- buildBriefingContext today
 
-  let prompt = buildDailyBriefingPrompt ctx today tz unit
+  let prompt = buildDailyBriefingPrompt ctx today tz unit aiEnabled
 
   resp <- complete prompt
   logInfo $ "Daily briefing LLM response: " <> T.take 200 (crResponseText resp)
 
-  let briefingText = case parseDailyBriefing (crResponseText resp) of
-        Left err -> do
-          T.unlines
+  case parseDailyBriefing (crResponseText resp) of
+    Left err -> do
+      let briefingText = T.unlines
             [ ":sunrise: *Daily Briefing*"
             , ""
             , crResponseText resp
             , ""
             , "_(" <> T.pack err <> ")_"
             ]
-        Right briefing -> formatDailyBriefing unit briefing
+      notify Notification
+        { notifChannel = notifyChannel
+        , notifText = briefingText
+        , notifLevel = Info
+        }
+    Right briefing -> do
+      -- Create AI delegation issues
+      case mAiStore of
+        Just aiStore | not (null (dbAiDelegations briefing)) -> do
+          logInfo $ "Creating " <> T.pack (show (length (dbAiDelegations briefing))) <> " AI delegation issues"
+          forM_ (dbAiDelegations briefing) $ \deleg -> do
+            now <- liftIO getCurrentTime
+            let issueBody = T.unlines
+                  [ "## Background"
+                  , adBody deleg
+                  , ""
+                  , "## Target Repository"
+                  , adTargetRepo deleg
+                  , ""
+                  , "## Source Task"
+                  , "Notion: " <> notionPageUrl (TaskId (adTaskId deleg))
+                  ]
+                task = Task
+                  { taskId = TaskId ""
+                  , taskTitle = adTitle deleg
+                  , taskDescription = issueBody
+                  , taskPriority = Medium
+                  , taskStatus = Open
+                  , taskDueDate = Nothing
+                  , taskEstimate = Nothing
+                  , taskSource = Nothing
+                  , taskCreatedAt = now
+                  , taskUpdatedAt = now
+                  }
+            result <- liftIO $ try $ opsCreateTask aiStore task
+            case result of
+              Left (e :: SomeException) -> logError $ "Failed to create AI issue: " <> T.pack (show e)
+              Right tid -> logInfo $ "Created AI delegation issue: " <> unTaskId tid
+        _ -> pure ()
 
-  notify Notification
-    { notifChannel = notifyChannel
-    , notifText = briefingText
-    , notifLevel = Info
-    }
+      notify Notification
+        { notifChannel = notifyChannel
+        , notifText = formatDailyBriefing unit briefing
+        , notifLevel = Info
+        }
 
   logInfo "Daily briefing completed"
 
@@ -279,6 +335,11 @@ formatDailyBriefing unit briefing = T.unlines $ concat
       [ ""
       , "*Estimate Requests:*"
       ] <> map formatEstimateRequest (dbEstimateRequests briefing)
+  , if null (dbAiDelegations briefing) then []
+    else
+      [ ""
+      , "*AI Delegation:*"
+      ] <> map formatAiDelegation (dbAiDelegations briefing)
   ]
 
 formatBriefingTask :: EstimateUnit -> BriefingTask -> Text
@@ -334,6 +395,14 @@ formatEstimateRequest er = T.concat
   [ ":hourglass: "
   , "<" <> notionPageUrl (TaskId (erTaskId er)) <> "|" <> erTitle er <> ">"
   , " — " <> erReason er
+  ]
+
+formatAiDelegation :: AiDelegation -> Text
+formatAiDelegation ad = T.concat
+  [ ":robot_face: "
+  , "*" <> adTitle ad <> "*"
+  , " → " <> adTargetRepo ad
+  , " — " <> adReason ad
   ]
 
 -- | Run the weekly briefing pipeline
