@@ -18,6 +18,8 @@ final class CoopManager {
 
     private(set) var status: Status = .stopped
     private(set) var launchAtLogin: Bool = false
+    private(set) var isDailyBriefingRunning = false
+    private(set) var isWeeklyBriefingRunning = false
 
     // MARK: - Private
 
@@ -160,15 +162,26 @@ final class CoopManager {
     // MARK: - Briefing
 
     func runDailyBriefing() {
-        runBriefing(type: "daily")
+        guard !isDailyBriefingRunning else { return }
+        isDailyBriefingRunning = true
+        runBriefing(type: "daily") { [weak self] in
+            self?.isDailyBriefingRunning = false
+        }
     }
 
     func runWeeklyBriefing() {
-        runBriefing(type: "weekly")
+        guard !isWeeklyBriefingRunning else { return }
+        isWeeklyBriefingRunning = true
+        runBriefing(type: "weekly") { [weak self] in
+            self?.isWeeklyBriefingRunning = false
+        }
     }
 
-    private func runBriefing(type: String) {
-        guard let coopPath = resolveCoopPath() else { return }
+    private func runBriefing(type: String, completion: @escaping () -> Void) {
+        guard let coopPath = resolveCoopPath() else {
+            completion()
+            return
+        }
 
         ensureConfigDir()
 
@@ -180,9 +193,17 @@ final class CoopManager {
         proc.executableURL = URL(fileURLWithPath: shell)
         proc.arguments = ["-l", "-c", cmd]
 
+        proc.terminationHandler = { _ in
+            DispatchQueue.main.async {
+                completion()
+            }
+        }
+
         do {
             try proc.run()
-        } catch {}
+        } catch {
+            completion()
+        }
     }
 
     // MARK: - Config & Log Actions

@@ -1,5 +1,34 @@
 import SwiftUI
 
+struct BriefingButton: View {
+    let title: String
+    let isRunning: Bool
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(isRunning ? "\(title)..." : title)
+                Spacer()
+                if isRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .disabled(isRunning)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(isHovering && !isRunning ? Color.accentColor.opacity(0.2) : Color.clear)
+        .cornerRadius(4)
+        .onHover { isHovering = $0 }
+    }
+}
+
 struct MenuButton: View {
     let title: String
     let action: () -> Void
@@ -62,8 +91,14 @@ struct CoopApp: App {
 
                 Divider()
 
-                MenuButton("Run Daily Briefing") { manager.runDailyBriefing() }
-                MenuButton("Run Weekly Briefing") { manager.runWeeklyBriefing() }
+                BriefingButton(
+                    title: "Run Daily Briefing",
+                    isRunning: manager.isDailyBriefingRunning
+                ) { manager.runDailyBriefing() }
+                BriefingButton(
+                    title: "Run Weekly Briefing",
+                    isRunning: manager.isWeeklyBriefingRunning
+                ) { manager.runWeeklyBriefing() }
 
                 Divider()
 
