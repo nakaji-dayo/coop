@@ -45,11 +45,6 @@ struct CoopApp: App {
 
                 Divider()
 
-                MenuButton("Run Daily Briefing") { manager.runDailyBriefing() }
-                MenuButton("Run Weekly Briefing") { manager.runWeeklyBriefing() }
-
-                Divider()
-
                 if manager.isRunning {
                     MenuButton("Restart") { manager.restart() }
                     MenuButton("Stop") { manager.stop() }
@@ -64,6 +59,11 @@ struct CoopApp: App {
                     NSApp.activate()
                     openWindow(id: "log")
                 }
+
+                Divider()
+
+                MenuButton("Run Daily Briefing") { manager.runDailyBriefing() }
+                MenuButton("Run Weekly Briefing") { manager.runWeeklyBriefing() }
 
                 Divider()
 

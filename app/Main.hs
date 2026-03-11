@@ -70,7 +70,9 @@ parseArgs :: [String] -> Command
 parseArgs ("auth":"google":"--config":p:_) = AuthGoogle p
 parseArgs ("auth":"google":_)              = AuthGoogle "config/coop-local.dhall"
 parseArgs ("briefing":"daily":"--config":p:_)  = RunDaily p
+parseArgs ("briefing":"daily":_)               = RunDaily "config/coop-dryrun.dhall"
 parseArgs ("briefing":"weekly":"--config":p:_) = RunWeekly p
+parseArgs ("briefing":"weekly":_)              = RunWeekly "config/coop-dryrun.dhall"
 parseArgs ("--config":p:_)                 = RunServer p
 parseArgs [p]                              = RunServer p
 parseArgs _                                = RunServer "config/coop-dryrun.dhall"
