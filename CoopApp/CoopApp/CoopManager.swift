@@ -157,6 +157,34 @@ final class CoopManager {
         self.process = nil
     }
 
+    // MARK: - Briefing
+
+    func runDailyBriefing() {
+        runBriefing(type: "daily")
+    }
+
+    func runWeeklyBriefing() {
+        runBriefing(type: "weekly")
+    }
+
+    private func runBriefing(type: String) {
+        guard let coopPath = resolveCoopPath() else { return }
+
+        ensureConfigDir()
+
+        let cmd =
+            "exec '\(coopPath)' briefing \(type) --config '\(Self.configFile.path)' >> '\(Self.logFile.path)' 2>&1"
+
+        let proc = Process()
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        proc.executableURL = URL(fileURLWithPath: shell)
+        proc.arguments = ["-l", "-c", cmd]
+
+        do {
+            try proc.run()
+        } catch {}
+    }
+
     // MARK: - Config & Log Actions
 
     func openConfig() {

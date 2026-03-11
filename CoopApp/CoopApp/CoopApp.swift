@@ -46,6 +46,11 @@ struct CoopApp: App {
                 Divider()
 
                 if manager.isRunning {
+                    MenuButton("Run Daily Briefing") { manager.runDailyBriefing() }
+                    MenuButton("Run Weekly Briefing") { manager.runWeeklyBriefing() }
+
+                    Divider()
+
                     MenuButton("Restart") { manager.restart() }
                     MenuButton("Stop") { manager.stop() }
                 } else {

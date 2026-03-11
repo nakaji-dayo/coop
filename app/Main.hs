@@ -2,9 +2,10 @@ module Main where
 
 import Coop.Config (loadConfig, Config (..), RunMode (..), ConnectionMode (..), DryrunConfig (..), SlackConfig (..), NotionConfig (..), LLMConfig (..), GoogleCalendarConfig (..), AiDelegationConfig (..), normalizeNotionId)
 import Coop.Agent.CatchUp (runCatchUp)
+import Coop.Agent.Core (dailyBriefing, weeklyBriefing)
 import Coop.App.Env (Env (..))
 import Coop.App.Log (withLogEnv, parseLogLevel)
-import Coop.App.Monad (AppM)
+import Coop.App.Monad (AppM, runAppM)
 import Coop.Server.Handlers (mkApp, mkHealthApp)
 import Coop.Adapter.Slack.SocketMode (runSlackSocketMode)
 import Coop.Scheduler (runScheduler)
@@ -42,6 +43,8 @@ main = do
       config <- loadConfig configPath
       manager <- newTlsManager
       runGoogleAuth (cfgGoogleCalendar config) manager
+    RunDaily configPath -> runBriefing configPath "daily" dailyBriefing
+    RunWeekly configPath -> runBriefing configPath "weekly" weeklyBriefing
     RunServer configPath -> do
       TIO.putStrLn $ "Loading config from: " <> pack configPath
       config <- loadConfig configPath
@@ -61,11 +64,13 @@ main = do
             TIO.putStrLn "Using Socket Mode for Slack connection"
             race_ (race_ (Warp.run port (mkHealthApp env)) (runSlackSocketMode env)) (runScheduler env)
 
-data Command = AuthGoogle FilePath | RunServer FilePath
+data Command = AuthGoogle FilePath | RunDaily FilePath | RunWeekly FilePath | RunServer FilePath
 
 parseArgs :: [String] -> Command
 parseArgs ("auth":"google":"--config":p:_) = AuthGoogle p
 parseArgs ("auth":"google":_)              = AuthGoogle "config/coop-local.dhall"
+parseArgs ("briefing":"daily":"--config":p:_)  = RunDaily p
+parseArgs ("briefing":"weekly":"--config":p:_) = RunWeekly p
 parseArgs ("--config":p:_)                 = RunServer p
 parseArgs [p]                              = RunServer p
 parseArgs _                                = RunServer "config/coop-dryrun.dhall"
@@ -122,3 +127,14 @@ mkEnv config logEnv manager = do
         , envCalendarStore = calendarOps
         , envAiTaskStore   = aiStore
         }
+
+runBriefing :: FilePath -> T.Text -> AppM () -> IO ()
+runBriefing configPath label action = do
+  TIO.putStrLn $ "Loading config from: " <> pack configPath
+  config <- loadConfig configPath
+  TIO.putStrLn $ "Running " <> label <> " briefing..."
+  withLogEnv (parseLogLevel (cfgLogLevel config)) $ \logEnv -> do
+    manager <- newTlsManager
+    env <- mkEnv config logEnv manager
+    runAppM env action
+  TIO.putStrLn $ label <> " briefing completed."
