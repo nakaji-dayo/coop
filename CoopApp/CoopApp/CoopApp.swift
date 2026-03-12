@@ -88,6 +88,10 @@ struct CoopApp: App {
                     NSApp.activate()
                     openWindow(id: "log")
                 }
+                BriefingButton(
+                    title: "Google Calendar Auth",
+                    isRunning: manager.isGoogleAuthRunning
+                ) { manager.runGoogleAuth() }
 
                 Divider()
 

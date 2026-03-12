@@ -20,6 +20,7 @@ final class CoopManager {
     private(set) var launchAtLogin: Bool = false
     private(set) var isDailyBriefingRunning = false
     private(set) var isWeeklyBriefingRunning = false
+    private(set) var isGoogleAuthRunning = false
 
     // MARK: - Private
 
@@ -157,6 +158,36 @@ final class CoopManager {
             kill(process.processIdentifier, SIGKILL)
         }
         self.process = nil
+    }
+
+    // MARK: - Google Auth
+
+    func runGoogleAuth() {
+        guard !isGoogleAuthRunning else { return }
+        guard let coopPath = resolveCoopPath() else { return }
+
+        ensureConfigDir()
+        isGoogleAuthRunning = true
+
+        let cmd =
+            "exec '\(coopPath)' auth google --config '\(Self.configFile.path)' >> '\(Self.logFile.path)' 2>&1"
+
+        let proc = Process()
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        proc.executableURL = URL(fileURLWithPath: shell)
+        proc.arguments = ["-l", "-c", cmd]
+
+        proc.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.isGoogleAuthRunning = false
+            }
+        }
+
+        do {
+            try proc.run()
+        } catch {
+            isGoogleAuthRunning = false
+        }
     }
 
     // MARK: - Briefing
